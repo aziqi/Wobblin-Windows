@@ -1046,23 +1046,13 @@ public:
                     int mfh = mf.bottom - mf.top;
 
                     double relativeX = static_cast<double>(pt.x - rc.left) / currentWidth;
-                    int newLeft = pt.x - static_cast<int>(relativeX* normalWidth);
+                    int newLeft = pt.x - static_cast<int>(relativeX * normalWidth);
                     int newTop = rc.top;
-
-                    HMONITOR srcMon = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
-                    MONITORINFO srcMi; srcMi.cbSize = sizeof(srcMi);
-                    RECT srcWork = {};
-                    if (GetMonitorInfoW(srcMon, &srcMi)) srcWork = srcMi.rcWork;
-                    else SystemParametersInfoW(SPI_GETWORKAREA, 0, &srcWork, 0);
 
                     captureLayeredState(target);
 
-                    wp.showCmd = SW_SHOWNORMAL;
-                    wp.rcNormalPosition.left = newLeft - srcWork.left;
-                    wp.rcNormalPosition.top = newTop - srcWork.top;
-                    wp.rcNormalPosition.right = wp.rcNormalPosition.left + normalWidth;
-                    wp.rcNormalPosition.bottom = wp.rcNormalPosition.top + normalHeight;
-                    SetWindowPlacement(target, &wp);
+                    ShowWindow(target, SW_RESTORE);
+                    SetWindowPos(target, HWND_TOP, newLeft, newTop, normalWidth, normalHeight, SWP_NOACTIVATE | SWP_FRAMECHANGED);
 
                     if (!grabber_.prepare(target)) { target_ = NULL; return; }
                     cacheGeometry();
@@ -1387,26 +1377,6 @@ private:
             SetWindowPos(target_, HWND_TOP, nl, nt, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_NOSENDCHANGING);
 
             DwmFlush();
-
-            {
-                RECT cr;
-                if (GetWindowRect(target_, &cr)) {
-                    HMONITOR hMon = MonitorFromRect(&cr, MONITOR_DEFAULTTONEAREST);
-                    MONITORINFO mi = { sizeof(mi) };
-                    if (hMon && GetMonitorInfoW(hMon, &mi)) {
-                        WINDOWPLACEMENT wp = { sizeof(WINDOWPLACEMENT) };
-                        if (GetWindowPlacement(target_, &wp)) {
-                            wp.rcNormalPosition.left = cr.left - mi.rcWork.left;
-                            wp.rcNormalPosition.top = cr.top - mi.rcWork.top;
-                            wp.rcNormalPosition.right = cr.right - mi.rcWork.left;
-                            wp.rcNormalPosition.bottom = cr.bottom - mi.rcWork.top;
-                            wp.showCmd = SW_SHOWNORMAL;
-                            wp.flags = 0;
-                            SetWindowPlacement(target_, &wp);
-                        }
-                    }
-                }
-            }
 
             BOOL disableTransitions = FALSE;
             DwmSetWindowAttribute(target_, 3, &disableTransitions, sizeof(disableTransitions));
