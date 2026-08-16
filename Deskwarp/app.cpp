@@ -83,6 +83,8 @@
 #include <d3dcompiler.h>
 #include <wrl/client.h>
 
+#include <timeapi.h>
+
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "gdi32.lib")
 #pragma comment(lib, "dwmapi.lib")
@@ -92,6 +94,7 @@
 #pragma comment(lib, "d3dcompiler.lib")
 #pragma comment(lib, "ole32.lib")
 #pragma comment(lib, "shell32.lib")
+#pragma comment(lib, "winmm.lib")
 
 using Microsoft::WRL::ComPtr;
 
@@ -1278,7 +1281,10 @@ private:
         while (renderRun_.load()) {
             ++frame;
             POINT cur;
-            { std::lock_guard<std::mutex> lk(mouseMtx_); cur = curMouse_; }
+            if (!GetCursorPos(&cur)) {
+                std::lock_guard<std::mutex> lk(mouseMtx_);
+                cur = curMouse_;
+            }
 
             POINT anchorPt;
             {
@@ -1321,7 +1327,6 @@ private:
             }
 
             renderFrame();
-            std::this_thread::sleep_for(std::chrono::milliseconds(cfg::kRenderSleepMs));
         }
 
         grabber_.stop();
@@ -3015,6 +3020,7 @@ int main(int argc, char* argv[]) {
     qInstallMessageHandler(secure_qt_message_handler);
 
 #ifdef _WIN32
+    timeBeginPeriod(1);
     apply_windows_mitigations();
     ::SetCurrentProcessExplicitAppUserModelID(L"Deskwarp.utility.v1");
     if (!WobblyController::ensureElevated(argc, argv)) {
