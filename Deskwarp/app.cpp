@@ -115,7 +115,7 @@ namespace cfg {
     inline float restPos = 0.3f;
     constexpr int kStepIters = 3;
     constexpr int kRenderSleepMs = 8;
-    constexpr int kCaptureSleepMs = 16;
+    constexpr int kCaptureSleepMs = 120;
     constexpr int kMaxSettleFrames = 1200;
     constexpr int kSteadyExit = 4;
     inline float boundRestitution = 0.18f;
@@ -631,6 +631,15 @@ public:
         si_ = si;
         meshScratch_.resize((size_t)(cfg::kTilesX + 1)* (cfg::kTilesY + 1));
 
+        for (int i = 0; i <= cfg::kTilesX; ++i) {
+            float u = (float)i / (float)cfg::kTilesX;
+            for (int k = 0; k < 4; ++k) BuContent_[i][k] = Bernstein(k, u);
+        }
+        for (int j = 0; j <= cfg::kTilesY; ++j) {
+            float v = (float)j / (float)cfg::kTilesY;
+            for (int k = 0; k < 4; ++k) BvContent_[j][k] = Bernstein(k, v);
+        }
+
         UINT flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
         D3D_FEATURE_LEVEL fl;
         D3D_FEATURE_LEVEL levels[] = { D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_10_0 };
@@ -878,24 +887,34 @@ private:
             ctx_->Unmap(cb_.Get(), 0);
         }
 
-        float Bu[cfg::kTilesX + 1][4];
-        float Bv[cfg::kTilesY + 1][4];
-        for (int i = 0; i <= cfg::kTilesX; ++i) {
-            float u = uMin + ((float)i / cfg::kTilesX)* (uMax - uMin);
-            for (int k = 0; k < 4; ++k) Bu[i][k] = Bernstein(k, u);
-        }
-        for (int j = 0; j <= cfg::kTilesY; ++j) {
-            float v = vMin + ((float)j / cfg::kTilesY)* (vMax - vMin);
-            for (int k = 0; k < 4; ++k) Bv[j][k] = Bernstein(k, v);
+        const float (*BuPtr)[4] = nullptr;
+        const float (*BvPtr)[4] = nullptr;
+        float BuLocal[cfg::kTilesX + 1][4];
+        float BvLocal[cfg::kTilesY + 1][4];
+
+        if (uMin == 0.0f && uMax == 1.0f && vMin == 0.0f && vMax == 1.0f) {
+            BuPtr = BuContent_;
+            BvPtr = BvContent_;
+        } else {
+            for (int i = 0; i <= cfg::kTilesX; ++i) {
+                float u = uMin + ((float)i / cfg::kTilesX)* (uMax - uMin);
+                for (int k = 0; k < 4; ++k) BuLocal[i][k] = Bernstein(k, u);
+            }
+            for (int j = 0; j <= cfg::kTilesY; ++j) {
+                float v = vMin + ((float)j / cfg::kTilesY)* (vMax - vMin);
+                for (int k = 0; k < 4; ++k) BvLocal[j][k] = Bernstein(k, v);
+            }
+            BuPtr = BuLocal;
+            BvPtr = BvLocal;
         }
 
         for (int j = 0; j <= cfg::kTilesY; ++j) {
             for (int i = 0; i <= cfg::kTilesX; ++i) {
                 float px = 0, py = 0;
                 for (int jj = 0; jj < 4; ++jj) {
-                    float bj = Bv[j][jj];
+                    float bj = BvPtr[j][jj];
                     for (int ii = 0; ii < 4; ++ii) {
-                        float bi = Bu[i][ii];
+                        float bi = BuPtr[i][ii];
                         const GridNode& n = ctrl[jj* 4 + ii];
                         float w = bi* bj;
                         px += w* n.x;
@@ -923,6 +942,8 @@ private:
     ScreenInfo si_ = {};
     int texW_ = 0, texH_ = 0;
     std::vector<MeshVertex> meshScratch_;
+    float BuContent_[cfg::kTilesX + 1][4] = {};
+    float BvContent_[cfg::kTilesY + 1][4] = {};
 
     ComPtr<ID3D11Device> device_;
     ComPtr<ID3D11DeviceContext> ctx_;
@@ -1154,6 +1175,11 @@ private:
         frameH_ = baseTexH_;
         captionH_ = baseCaptionH_;
         curScale_ = 1.0f;
+        lastScale_ = 1.0f;
+
+        BOOL ds = FALSE;
+        SystemParametersInfoW(SPI_GETDROPSHADOW, 0, &ds, 0);
+        dropShadow_ = (ds != FALSE);
     }
 
     void applyScale(float s) {
@@ -1267,11 +1293,7 @@ private:
             for (int i = 0; i < 16; ++i) ctrl[i] = body_.nodes[i];
         }
 
-        BOOL ds = FALSE;
-        SystemParametersInfoW(SPI_GETDROPSHADOW, 0, &ds, 0);
-
-        gpu_.drawScene(ctrl, win11_, ds != FALSE, curScale_);
-        showOverlay(false);
+        gpu_.drawScene(ctrl, win11_, dropShadow_, curScale_);
         gpu_.present();
     }
 
@@ -1294,8 +1316,12 @@ private:
                 anchorPt.y = (LONG)floorf(body_.nodes[a].y);
             }
             float scale = scaleForPoint(anchorPt);
-            applyScale(scale);
-            { std::lock_guard<std::mutex> lk(bodyMtx_); body_.setRest((float)frameW_, (float)frameH_); }
+            if (fabsf(scale - lastScale_) > 0.001f) {
+                lastScale_ = scale;
+                applyScale(scale);
+                std::lock_guard<std::mutex> lk(bodyMtx_);
+                body_.setRest((float)frameW_, (float)frameH_);
+            }
 
             if (dragging_.load()) {
                 float dx = (float)(cur.x - lastMouse_.x);
@@ -1461,6 +1487,8 @@ private:
     int baseCaptionH_ = 0;
     UINT captureDpi_ = cfg::kBaseDpi;
     float curScale_ = 1.0f;
+    float lastScale_ = 1.0f;
+    bool dropShadow_ = false;
     LONG_PTR origExStyle_ = 0;
     BYTE origAlpha_ = 255;
     DWORD origFlags_ = 0;
