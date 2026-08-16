@@ -105,44 +105,50 @@ namespace cfg {
     constexpr int kGridH = 4;
     constexpr int kTilesX = 32;
     constexpr int kTilesY = 32;
-    inline float friction = 3.5f;
-    inline float stiffness = 1.9f;
-    inline float mass = 30.0f;
-    inline float restVel = 0.02f;
-    inline float restPos = 0.3f;
+    inline float friction = 7.0f;
+    inline float stiffness = 4.5f;
+    inline float mass = 12.0f;
+    inline float restVel = 0.005f;
+    inline float restPos = 0.08f;
     constexpr int kStepIters = 3;
     constexpr int kRenderSleepMs = 8;
     constexpr int kCaptureSleepMs = 16;
     constexpr int kMaxSettleFrames = 1200;
-    constexpr int kSteadyExit = 4;
-    inline float boundRestitution = 0.18f;
+    constexpr int kSteadyExit = 2;
+    inline float boundRestitution = 0.05f;
     constexpr int kMinCaptionVisible = 80;
     constexpr int kMaxCaptionVisible = 320;
     constexpr UINT kBaseDpi = 96;
     constexpr float kMinScale = 0.25f;
     constexpr float kMaxScale = 8.0f;
-    inline float shapeK = 0.55f;
-    inline float neighborK = 2.1f;
+    inline float shapeK = 0.92f;
+    inline float neighborK = 4.5f;
     inline float lagNear = 1.0f;
-    inline float lagFar = 0.40f;
+    inline float lagFar = 0.85f;
+    constexpr float kMaxNodeVel = 80.0f;
+    constexpr float kSettleKGrowth = 1.15f;
 
     inline void applyRealismLevel(int level) {
         switch (level) {
         case 1:
-            shapeK = 0.85f; neighborK = 3.2f; stiffness = neighborK; friction = 5.5f; mass = 34.0f; lagFar = 0.55f; lagNear = 1.0f;
-            restVel = 0.01f; restPos = 0.12f; boundRestitution = 0.08f;
+            // Level 1: Native Windows Subtle (Default) - Zero-lag, rapid recovery, crisp micro-wobble
+            shapeK = 0.92f; neighborK = 4.5f; stiffness = neighborK; friction = 7.0f; mass = 12.0f; lagFar = 0.85f; lagNear = 1.0f;
+            restVel = 0.005f; restPos = 0.08f; boundRestitution = 0.05f;
             break;
         case 2:
-            shapeK = 0.55f; neighborK = 2.1f; stiffness = neighborK; friction = 3.6f; mass = 30.0f; lagFar = 0.40f; lagNear = 1.0f;
-            restVel = 0.02f; restPos = 0.3f; boundRestitution = 0.18f;
+            // Level 2: Balanced / Aero Glass - Smooth responsive elasticity
+            shapeK = 0.65f; neighborK = 2.6f; stiffness = neighborK; friction = 4.5f; mass = 22.0f; lagFar = 0.55f; lagNear = 1.0f;
+            restVel = 0.015f; restPos = 0.20f; boundRestitution = 0.12f;
             break;
         case 3:
-            shapeK = 0.32f; neighborK = 1.3f; stiffness = neighborK; friction = 2.2f; mass = 24.0f; lagFar = 0.28f; lagNear = 1.0f;
-            restVel = 0.035f; restPos = 0.45f; boundRestitution = 0.28f;
+            // Level 3: Fluid / Natural Jelly (Compiz-like)
+            shapeK = 0.45f; neighborK = 1.8f; stiffness = neighborK; friction = 2.8f; mass = 28.0f; lagFar = 0.38f; lagNear = 1.0f;
+            restVel = 0.025f; restPos = 0.35f; boundRestitution = 0.22f;
             break;
         default:
-            shapeK = 0.18f; neighborK = 0.7f; stiffness = neighborK; friction = 1.3f; mass = 18.0f; lagFar = 0.18f; lagNear = 1.0f;
-            restVel = 0.055f; restPos = 0.65f; boundRestitution = 0.42f;
+            // Level 4: Gelatin / Hyper-Elastic
+            shapeK = 0.25f; neighborK = 1.0f; stiffness = neighborK; friction = 1.6f; mass = 20.0f; lagFar = 0.22f; lagNear = 1.0f;
+            restVel = 0.045f; restPos = 0.55f; boundRestitution = 0.35f;
             break;
         }
     }
@@ -390,8 +396,12 @@ public:
     float mass = 0.0f;
     float baseW = 0.0f, baseH = 0.0f;
     float targetLeft_ = 0.0f, targetTop_ = 0.0f, targetW_ = 0.0f, targetH_ = 0.0f;
-    float shapeK = 0.55f, neighborK = 2.1f, lagNear = 1.0f, lagFar = 0.40f;
+    float shapeK = 0.92f, neighborK = 4.5f, lagNear = 1.0f, lagFar = 0.85f;
+    float settleK_ = 1.0f;
     std::vector<float> shapeWeight_;
+
+    void resetSettleK() { settleK_ = 1.0f; }
+    void tickSettleK() { settleK_ = std::clamp(settleK_ * cfg::kSettleKGrowth, 1.0f, 8.0f); }
 
     void build(float ox, float oy, float w, float h) {
         nodes.assign((size_t)cfg::kGridW * cfg::kGridH, GridNode{});
@@ -406,6 +416,7 @@ public:
         mass = cfg::mass;
         baseW = w; baseH = h;
         targetLeft_ = ox; targetTop_ = oy; targetW_ = w; targetH_ = h;
+        settleK_ = 1.0f;
         shapeWeight_.assign((size_t)cfg::kGridW * cfg::kGridH, 1.0f);
 
         const float sx = w / float(cfg::kGridW - 1);
@@ -496,6 +507,15 @@ public:
         n.immobile = 1; n.vx = n.vy = n.fx = n.fy = 0.0f;
     }
 
+    void setAnchorPos(float x, float y) {
+        if (anchor >= 0 && anchor < (int)nodes.size()) {
+            nodes[anchor].x = x;
+            nodes[anchor].y = y;
+            nodes[anchor].vx = 0.0f;
+            nodes[anchor].vy = 0.0f;
+        }
+    }
+
     void moveAnchor(float dx, float dy) {
         if (anchor >= 0) {
             nodes[anchor].x += dx;
@@ -512,9 +532,10 @@ public:
     }
 
     void integrate(int iters) {
-        constexpr float kMaxVel = 120.0f;
+        const float kMaxVel = cfg::kMaxNodeVel;
         const float sx = targetW_ / float(cfg::kGridW - 1);
         const float sy = targetH_ / float(cfg::kGridH - 1);
+        const float curShapeK = shapeK * settleK_;
 
         for (int it = 0; it < iters; ++it) {
             // (a) Layer 2: Neighbor elastic springs
@@ -534,8 +555,8 @@ public:
                         float idealX = targetLeft_ + c * sx;
                         float idealY = targetTop_ + r * sy;
                         float w = (i < (int)shapeWeight_.size()) ? shapeWeight_[i] : 1.0f;
-                        n.fx += w * shapeK * (idealX - n.x);
-                        n.fy += w * shapeK * (idealY - n.y);
+                        n.fx += w * curShapeK * (idealX - n.x);
+                        n.fy += w * curShapeK * (idealY - n.y);
                     }
                 }
             }
@@ -1541,12 +1562,10 @@ private:
             }
 
             if (dragging_.load()) {
-                float dx = (float)(cur.x - lastMouse_.x);
-                float dy = (float)(cur.y - lastMouse_.y);
                 lastMouse_ = cur;
                 {
                     std::lock_guard<std::mutex> lk(bodyMtx_);
-                    body_.moveAnchor(dx, dy);
+                    body_.setAnchorPos((float)cur.x, (float)cur.y);
                     body_.updateTarget((float)cur.x - (float)grabOffset_.x,
                                        (float)cur.y - (float)grabOffset_.y,
                                        (float)frameW_, (float)frameH_);
@@ -1557,6 +1576,7 @@ private:
                 bool rest;
                 {
                     std::lock_guard<std::mutex> lk(bodyMtx_);
+                    body_.tickSettleK();
                     float minL, maxL, minT, maxT;
                     boundsFor(body_.nodes[0].x, body_.nodes[0].y, minL, maxL, minT, maxT);
                     float fx = std::clamp(body_.nodes[0].x, minL, maxL);
@@ -2075,7 +2095,7 @@ private:
     std::atomic<bool> dragRequested_{ false };
     HWND pendingTarget_ = NULL;
     POINT pendingPt_ = {};
-    int realism_ = 3;
+    int realism_ = 1;
 };
 
 WobblyController* WobblyController::s_self = nullptr;
