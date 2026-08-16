@@ -105,50 +105,40 @@ namespace cfg {
     constexpr int kGridH = 4;
     constexpr int kTilesX = 32;
     constexpr int kTilesY = 32;
-    inline float friction = 7.0f;
-    inline float stiffness = 4.5f;
-    inline float mass = 12.0f;
-    inline float restVel = 0.005f;
-    inline float restPos = 0.08f;
+    inline float friction = 3.5f;
+    inline float stiffness = 1.9f;
+    inline float mass = 30.0f;
+    inline float restVel = 0.02f;
+    inline float restPos = 0.3f;
     constexpr int kStepIters = 3;
     constexpr int kRenderSleepMs = 8;
     constexpr int kCaptureSleepMs = 16;
     constexpr int kMaxSettleFrames = 1200;
-    constexpr int kSteadyExit = 2;
-    inline float boundRestitution = 0.05f;
+    constexpr int kSteadyExit = 4;
+    inline float boundRestitution = 0.18f;
     constexpr int kMinCaptionVisible = 80;
     constexpr int kMaxCaptionVisible = 320;
     constexpr UINT kBaseDpi = 96;
     constexpr float kMinScale = 0.25f;
     constexpr float kMaxScale = 8.0f;
-    inline float shapeK = 0.92f;
-    inline float neighborK = 4.5f;
-    inline float lagNear = 1.0f;
-    inline float lagFar = 0.85f;
-    constexpr float kMaxNodeVel = 80.0f;
-    constexpr float kSettleKGrowth = 1.15f;
 
     inline void applyRealismLevel(int level) {
         switch (level) {
         case 1:
-            // Level 1: Native Windows Subtle (Default) - Zero-lag, rapid recovery, crisp micro-wobble
-            shapeK = 0.92f; neighborK = 4.5f; stiffness = neighborK; friction = 7.0f; mass = 12.0f; lagFar = 0.85f; lagNear = 1.0f;
-            restVel = 0.005f; restPos = 0.08f; boundRestitution = 0.05f;
+            friction = 5.5f; stiffness = 3.2f; mass = 38.0f;
+            restVel = 0.01f; restPos = 0.12f; boundRestitution = 0.08f;
             break;
         case 2:
-            // Level 2: Balanced / Aero Glass - Smooth responsive elasticity
-            shapeK = 0.65f; neighborK = 2.6f; stiffness = neighborK; friction = 4.5f; mass = 22.0f; lagFar = 0.55f; lagNear = 1.0f;
-            restVel = 0.015f; restPos = 0.20f; boundRestitution = 0.12f;
+            friction = 3.5f; stiffness = 1.9f; mass = 30.0f;
+            restVel = 0.02f; restPos = 0.3f; boundRestitution = 0.18f;
             break;
         case 3:
-            // Level 3: Fluid / Natural Jelly (Compiz-like)
-            shapeK = 0.45f; neighborK = 1.8f; stiffness = neighborK; friction = 2.8f; mass = 28.0f; lagFar = 0.38f; lagNear = 1.0f;
-            restVel = 0.025f; restPos = 0.35f; boundRestitution = 0.22f;
+            friction = 2.2f; stiffness = 1.2f; mass = 24.0f;
+            restVel = 0.035f; restPos = 0.45f; boundRestitution = 0.28f;
             break;
         default:
-            // Level 4: Gelatin / Hyper-Elastic
-            shapeK = 0.25f; neighborK = 1.0f; stiffness = neighborK; friction = 1.6f; mass = 20.0f; lagFar = 0.22f; lagNear = 1.0f;
-            restVel = 0.045f; restPos = 0.55f; boundRestitution = 0.35f;
+            friction = 1.2f; stiffness = 0.6f; mass = 18.0f;
+            restVel = 0.055f; restPos = 0.65f; boundRestitution = 0.42f;
             break;
         }
     }
@@ -237,102 +227,6 @@ namespace dpiapi {
     }
 }
 
-// Active-monitor model: resolution, orientation (portrait/landscape), refresh
-// and effective DPI per monitor. Re-enumerated on WM_DISPLAYCHANGE /
-// WM_DPICHANGED so resolution/orientation hotplug is picked up automatically.
-struct MonitorInfoEx {
-    HMONITOR hmon = NULL;
-    RECT rcMonitor = { 0, 0, 0, 0 };   // physical px, virtual-screen coords
-    RECT rcWork = { 0, 0, 0, 0 };
-    UINT dpi = 96;
-    int rotation = 0;                  // 0, 90, 180, 270 (degrees)
-    float hz = 60.0f;
-};
-
-class MonitorTopology {
-public:
-    bool enumNow() {
-        monitors_.clear();
-        if (!EnumDisplayMonitors(NULL, NULL, &MonitorTopology::enumCb,
-                                 reinterpret_cast<LPARAM>(this)))
-            return false;
-        return !monitors_.empty();
-    }
-
-    size_t count() const { return monitors_.size(); }
-    const MonitorInfoEx* at(size_t i) const {
-        return i < monitors_.size() ? &monitors_[i] : nullptr;
-    }
-
-    const MonitorInfoEx* atPoint(POINT p) const {
-        HMONITOR h = MonitorFromPoint(p, MONITOR_DEFAULTTONEAREST);
-        return findByHandle(h);
-    }
-    const MonitorInfoEx* atRect(const RECT& r) const {
-        POINT c = { (r.left + r.right) / 2, (r.top + r.bottom) / 2 };
-        return atPoint(c);
-    }
-    const MonitorInfoEx* primary() const {
-        for (const auto& m : monitors_)
-            if (m.rcMonitor.left == 0 && m.rcMonitor.top == 0) return &m;
-        return monitors_.empty() ? nullptr : &monitors_[0];
-    }
-
-    void debugDump() const {
-        wchar_t buf[320];
-        for (size_t i = 0; i < monitors_.size(); ++i) {
-            const auto& m = monitors_[i];
-            swprintf_s(buf, _countof(buf),
-                L"[Deskwarp] Monitor %zu: %dx%d @%u%% rot=%d hz=%.0f "
-                L"pos=(%d,%d) work=(%d,%d)-(%d,%d)\n",
-                i,
-                m.rcMonitor.right - m.rcMonitor.left,
-                m.rcMonitor.bottom - m.rcMonitor.top,
-                (m.dpi * 100) / 96,
-                m.rotation, m.hz,
-                m.rcMonitor.left, m.rcMonitor.top,
-                m.rcWork.left, m.rcWork.top, m.rcWork.right, m.rcWork.bottom);
-            OutputDebugStringW(buf);
-        }
-    }
-
-private:
-    static BOOL CALLBACK enumCb(HMONITOR h, HDC, LPRECT rc, LPARAM lp) {
-        auto* self = reinterpret_cast<MonitorTopology*>(lp);
-        MonitorInfoEx m;
-        m.hmon = h;
-        if (rc) m.rcMonitor = *rc;
-        MONITORINFOEXW mi = { sizeof(mi) };
-        if (GetMonitorInfoW(h, &mi)) {
-            m.rcWork = mi.rcWork;
-            DEVMODEW dm;
-            ZeroMemory(&dm, sizeof(dm));
-            dm.dmSize = sizeof(dm);
-            if (EnumDisplaySettingsW(mi.szDevice, ENUM_CURRENT_SETTINGS, &dm)) {
-                switch (dm.dmDisplayOrientation) {
-                case DMDO_90:  m.rotation = 90;  break;
-                case DMDO_180: m.rotation = 180; break;
-                case DMDO_270: m.rotation = 270; break;
-                default:       m.rotation = 0;   break;
-                }
-                if (dm.dmDisplayFrequency) m.hz = static_cast<float>(dm.dmDisplayFrequency);
-            }
-        }
-        m.dpi = dpiapi::forMonitor(h);
-        if (m.dpi == 0) m.dpi = 96;
-        self->monitors_.push_back(m);
-        return TRUE;
-    }
-
-    const MonitorInfoEx* findByHandle(HMONITOR h) const {
-        for (const auto& m : monitors_)
-            if (m.hmon == h) return &m;
-        return nullptr;
-    }
-
-    std::vector<MonitorInfoEx> monitors_;
-};
-
 static const char* kVsSource =
 "cbuffer CB : register(b0) { float4 screen; float4 texInfo; };\n"
 "struct VSIn { float2 pos : POSITION; float2 uv : TEXCOORD0; };\n"
@@ -395,93 +289,41 @@ public:
     float stiffness = 0.0f;
     float mass = 0.0f;
     float baseW = 0.0f, baseH = 0.0f;
-    float targetLeft_ = 0.0f, targetTop_ = 0.0f, targetW_ = 0.0f, targetH_ = 0.0f;
-    float shapeK = 0.92f, neighborK = 4.5f, lagNear = 1.0f, lagFar = 0.85f;
-    float settleK_ = 1.0f;
-    std::vector<float> shapeWeight_;
-
-    void resetSettleK() { settleK_ = 1.0f; }
-    void tickSettleK() { settleK_ = std::clamp(settleK_ * cfg::kSettleKGrowth, 1.0f, 8.0f); }
 
     void build(float ox, float oy, float w, float h) {
-        nodes.assign((size_t)cfg::kGridW * cfg::kGridH, GridNode{});
+        nodes.assign((size_t)cfg::kGridW* cfg::kGridH, GridNode{});
         springs.clear();
         anchor = -1;
         friction = cfg::friction;
-        stiffness = cfg::neighborK;
-        neighborK = cfg::neighborK;
-        shapeK = cfg::shapeK;
-        lagNear = cfg::lagNear;
-        lagFar = cfg::lagFar;
+        stiffness = cfg::stiffness;
         mass = cfg::mass;
         baseW = w; baseH = h;
-        targetLeft_ = ox; targetTop_ = oy; targetW_ = w; targetH_ = h;
-        settleK_ = 1.0f;
-        shapeWeight_.assign((size_t)cfg::kGridW * cfg::kGridH, 1.0f);
-
         const float sx = w / float(cfg::kGridW - 1);
         const float sy = h / float(cfg::kGridH - 1);
         for (int r = 0; r < cfg::kGridH; ++r) {
             for (int c = 0; c < cfg::kGridW; ++c) {
-                GridNode& n = nodes[(size_t)r * cfg::kGridW + c];
+                GridNode& n = nodes[(size_t)r* cfg::kGridW + c];
                 n = GridNode{};
-                n.x = ox + c * sx;
-                n.y = oy + r * sy;
+                n.x = ox + c* sx;
+                n.y = oy + r* sy;
             }
         }
         for (int r = 0; r < cfg::kGridH; ++r) {
             for (int c = 0; c < cfg::kGridW; ++c) {
-                int idx = r * cfg::kGridW + c;
-                // Horizontal orthogonal spring
+                int idx = r* cfg::kGridW + c;
                 if (c < cfg::kGridW - 1) springs.push_back({ idx, idx + 1, sx, 0.0f });
-                // Vertical orthogonal spring
                 if (r < cfg::kGridH - 1) springs.push_back({ idx, idx + cfg::kGridW, 0.0f, sy });
-                // Diagonal shear spring 1 (top-left to bottom-right)
-                if (c < cfg::kGridW - 1 && r < cfg::kGridH - 1)
-                    springs.push_back({ idx, idx + cfg::kGridW + 1, sx, sy });
-                // Diagonal shear spring 2 (top-right to bottom-left)
-                if (c < cfg::kGridW - 1 && r < cfg::kGridH - 1)
-                    springs.push_back({ idx + 1, idx + cfg::kGridW, -sx, sy });
-            }
-        }
-    }
-
-    void updateTarget(float left, float top, float w, float h) {
-        targetLeft_ = left;
-        targetTop_ = top;
-        targetW_ = w;
-        targetH_ = h;
-    }
-
-    void setAnchorWeights(int anchorIdx) {
-        if (anchorIdx < 0 || anchorIdx >= (int)nodes.size()) {
-            shapeWeight_.assign((size_t)cfg::kGridW * cfg::kGridH, 1.0f);
-            return;
-        }
-        int ar = anchorIdx / cfg::kGridW;
-        int ac = anchorIdx % cfg::kGridW;
-        float maxGridDist = std::sqrt(float((cfg::kGridW - 1) * (cfg::kGridW - 1) + (cfg::kGridH - 1) * (cfg::kGridH - 1)));
-        if (maxGridDist < 0.001f) maxGridDist = 1.0f;
-        for (int r = 0; r < cfg::kGridH; ++r) {
-            for (int c = 0; c < cfg::kGridW; ++c) {
-                int idx = r * cfg::kGridW + c;
-                float d = std::sqrt(float((r - ar) * (r - ar) + (c - ac) * (c - ac)));
-                float rho = std::clamp(1.0f - (d / maxGridDist), 0.0f, 1.0f);
-                shapeWeight_[idx] = lagFar + (lagNear - lagFar) * rho;
             }
         }
     }
 
     void setRest(float w, float h) {
         baseW = w; baseH = h;
-        targetW_ = w; targetH_ = h;
         const float sx = w / float(cfg::kGridW - 1);
         const float sy = h / float(cfg::kGridH - 1);
         for (auto& s : springs) {
-            if (s.restX > 0.0f) s.restX = sx;
-            else if (s.restX < 0.0f) s.restX = -sx;
-            if (s.restY > 0.0f) s.restY = sy;
-            else if (s.restY < 0.0f) s.restY = -sy;
+            if (s.restX != 0.0f) s.restX = sx;
+            if (s.restY != 0.0f) s.restY = sy;
         }
     }
 
@@ -496,27 +338,15 @@ public:
 
     void pin(float x, float y) {
         anchor = nearest(x, y);
-        if (anchor >= 0 && anchor < (int)nodes.size()) {
-            GridNode& n = nodes[anchor];
-            n.immobile = 1; n.vx = n.vy = n.fx = n.fy = 0.0f;
-        }
+        GridNode& n = nodes[anchor];
+        n.immobile = 1; n.vx = n.vy = n.fx = n.fy = 0.0f;
     }
 
     void pinAt(float x, float y) {
         anchor = nearest(x, y);
-        if (anchor >= 0 && anchor < (int)nodes.size()) {
-            GridNode& n = nodes[anchor];
-            n.immobile = 1; n.vx = n.vy = n.fx = n.fy = 0.0f;
-        }
-    }
-
-    void setAnchorPos(float x, float y) {
-        if (anchor >= 0 && anchor < (int)nodes.size()) {
-            nodes[anchor].x = x;
-            nodes[anchor].y = y;
-            nodes[anchor].vx = 0.0f;
-            nodes[anchor].vy = 0.0f;
-        }
+        GridNode& n = nodes[anchor];
+        n.x = x; n.y = y;
+        n.immobile = 1; n.vx = n.vy = n.fx = n.fy = 0.0f;
     }
 
     void moveAnchor(float dx, float dy) {
@@ -525,112 +355,33 @@ public:
             nodes[anchor].y += dy;
             float stepVx = dx / (float)cfg::kStepIters;
             float stepVy = dy / (float)cfg::kStepIters;
-            nodes[anchor].vx = (nodes[anchor].vx * 0.5f) + (stepVx * 0.5f);
-            nodes[anchor].vy = (nodes[anchor].vy * 0.5f) + (stepVy * 0.5f);
+            nodes[anchor].vx = (nodes[anchor].vx *0.5f) + (stepVx* 0.5f);
+            nodes[anchor].vy = (nodes[anchor].vy *0.5f) + (stepVy* 0.5f);
         }
     }
 
     void release() {
-        if (anchor >= 0 && anchor < (int)nodes.size()) {
-            nodes[anchor].immobile = 0;
-            anchor = -1;
-        }
+        if (anchor >= 0) { nodes[anchor].immobile = 0; anchor = -1; }
     }
 
     void integrate(int iters) {
-        const float kMaxVel = cfg::kMaxNodeVel;
-        const float sx = targetW_ / float(cfg::kGridW - 1);
-        const float sy = targetH_ / float(cfg::kGridH - 1);
-        const float curShapeK = shapeK * settleK_;
-
         for (int it = 0; it < iters; ++it) {
-            // (a) Layer 2: Neighbor elastic springs
             for (auto& s : springs) {
-                float fx = neighborK * (nodes[s.b].x - nodes[s.a].x - s.restX);
+                float fx = stiffness* (nodes[s.b].x - nodes[s.a].x - s.restX);
                 nodes[s.a].fx += fx; nodes[s.b].fx -= fx;
-                float fy = neighborK * (nodes[s.b].y - nodes[s.a].y - s.restY);
+                float fy = stiffness* (nodes[s.b].y - nodes[s.a].y - s.restY);
                 nodes[s.a].fy += fy; nodes[s.b].fy -= fy;
             }
-
-            // (b) Layer 1: Shape-restoring force to ideal moving target frame
-            for (int r = 0; r < cfg::kGridH; ++r) {
-                for (int c = 0; c < cfg::kGridW; ++c) {
-                    int i = r * cfg::kGridW + c;
-                    GridNode& n = nodes[i];
-                    if (!n.immobile) {
-                        float idealX = targetLeft_ + c * sx;
-                        float idealY = targetTop_ + r * sy;
-                        float w = (i < (int)shapeWeight_.size()) ? shapeWeight_[i] : 1.0f;
-                        n.fx += w * curShapeK * (idealX - n.x);
-                        n.fy += w * curShapeK * (idealY - n.y);
-                    }
-                }
-            }
-
-            // (c) Damping + Euler + velocity clamp
-            for (int i = 0; i < (int)nodes.size(); ++i) {
-                GridNode& n = nodes[i];
+            for (auto& n : nodes) {
                 if (!n.immobile) {
-                    n.fx -= friction * n.vx;
-                    n.fy -= friction * n.vy;
+                    n.fx -= friction* n.vx;
+                    n.fy -= friction* n.vy;
                     n.vx += n.fx / mass;
                     n.vy += n.fy / mass;
-                    n.vx = std::clamp(n.vx, -kMaxVel, kMaxVel);
-                    n.vy = std::clamp(n.vy, -kMaxVel, kMaxVel);
                     n.x += n.vx;
                     n.y += n.vy;
                 }
-                // (e) NaN guard
-                if (!(n.x == n.x) || !(n.y == n.y)) {
-                    int r = i / cfg::kGridW;
-                    int c = i % cfg::kGridW;
-                    n.x = targetLeft_ + c * sx;
-                    n.y = targetTop_ + r * sy;
-                    n.vx = n.vy = 0.0f;
-                }
                 n.fx = 0.0f; n.fy = 0.0f;
-            }
-
-            // (d) Strict Monotonic Non-Inversion Barrier
-            // Enforces that columns and rows maintain strictly positive spacing, preventing any folding
-            const float minGapX = sx * 0.20f;
-            for (int r = 0; r < cfg::kGridH; ++r) {
-                for (int c = 0; c < cfg::kGridW - 1; ++c) {
-                    int i1 = r * cfg::kGridW + c;
-                    int i2 = r * cfg::kGridW + c + 1;
-                    float diff = nodes[i2].x - nodes[i1].x;
-                    if (diff < minGapX) {
-                        float overlap = (minGapX - diff) * 0.5f;
-                        if (!nodes[i1].immobile && !nodes[i2].immobile) {
-                            nodes[i1].x -= overlap;
-                            nodes[i2].x += overlap;
-                        } else if (!nodes[i1].immobile) {
-                            nodes[i1].x -= overlap * 2.0f;
-                        } else if (!nodes[i2].immobile) {
-                            nodes[i2].x += overlap * 2.0f;
-                        }
-                    }
-                }
-            }
-
-            const float minGapY = sy * 0.20f;
-            for (int c = 0; c < cfg::kGridW; ++c) {
-                for (int r = 0; r < cfg::kGridH - 1; ++r) {
-                    int i1 = r * cfg::kGridW + c;
-                    int i2 = (r + 1) * cfg::kGridW + c;
-                    float diff = nodes[i2].y - nodes[i1].y;
-                    if (diff < minGapY) {
-                        float overlap = (minGapY - diff) * 0.5f;
-                        if (!nodes[i1].immobile && !nodes[i2].immobile) {
-                            nodes[i1].y -= overlap;
-                            nodes[i2].y += overlap;
-                        } else if (!nodes[i1].immobile) {
-                            nodes[i1].y -= overlap * 2.0f;
-                        } else if (!nodes[i2].immobile) {
-                            nodes[i2].y += overlap * 2.0f;
-                        }
-                    }
-                }
             }
         }
     }
@@ -647,8 +398,8 @@ public:
         else if (ry > maxT) { corrY = maxT - ry; signY = 1; }
 
         if (corrX != 0.0f || corrY != 0.0f) {
-            float pullX = corrX * 0.2f;
-            float pullY = corrY * 0.2f;
+            float pullX = corrX* 0.2f;
+            float pullY = corrY* 0.2f;
             for (auto& n : nodes) {
                 n.x += pullX;
                 n.y += pullY;
@@ -658,13 +409,13 @@ public:
         if (signX != 0) {
             for (auto& n : nodes) {
                 if ((signX > 0 && n.vx > 0.0f) || (signX < 0 && n.vx < 0.0f))
-                    n.vx = -restitution * fabsf(n.vx);
+                    n.vx = -restitution* fabsf(n.vx);
             }
         }
         if (signY != 0) {
             for (auto& n : nodes) {
                 if ((signY > 0 && n.vy > 0.0f) || (signY < 0 && n.vy < 0.0f))
-                    n.vy = -restitution * fabsf(n.vy);
+                    n.vy = -restitution* fabsf(n.vy);
             }
         }
     }
@@ -676,22 +427,22 @@ public:
         for (size_t i = 0; i < nodes.size(); ++i) {
             int c = (int)(i % cfg::kGridW);
             int r = (int)(i / cfg::kGridW);
-            nodes[i].x = bx + c * sx;
-            nodes[i].y = by + r * sy;
+            nodes[i].x = bx + c* sx;
+            nodes[i].y = by + r* sy;
             nodes[i].vx = nodes[i].vy = nodes[i].fx = nodes[i].fy = 0.0f;
         }
     }
 
     bool settled() const {
-        const float sx = targetW_ / float(cfg::kGridW - 1);
-        const float sy = targetH_ / float(cfg::kGridH - 1);
+        const float sx = baseW / float(cfg::kGridW - 1);
+        const float sy = baseH / float(cfg::kGridH - 1);
+        float bx = nodes[0].x, by = nodes[0].y;
         for (size_t i = 0; i < nodes.size(); ++i) {
             if (fabsf(nodes[i].vx) > cfg::restVel || fabsf(nodes[i].vy) > cfg::restVel) return false;
             int c = (int)(i % cfg::kGridW);
             int r = (int)(i / cfg::kGridW);
-            float idealX = targetLeft_ + c * sx;
-            float idealY = targetTop_ + r * sy;
-            if (fabsf(nodes[i].x - idealX) > cfg::restPos || fabsf(nodes[i].y - idealY) > cfg::restPos) return false;
+            float ex = bx + c *sx, ey = by + r* sy;
+            if (fabsf(nodes[i].x - ex) > cfg::restPos || fabsf(nodes[i].y - ey) > cfg::restPos) return false;
         }
         return true;
     }
@@ -1070,7 +821,7 @@ public:
         }
     }
 
-    void drawScene(const GridNode* ctrl, bool win11, bool dropShadow, float scale, UINT displayDpi = cfg::kBaseDpi) {
+    void drawScene(const GridNode* ctrl, bool win11, bool dropShadow, float scale) {
         float clear[4] = { 0, 0, 0, 0 };
         ctx_->ClearRenderTargetView(rtv_.Get(), clear);
         ID3D11RenderTargetView* rtvs[] = { rtv_.Get() };
@@ -1102,11 +853,9 @@ public:
         float padXpct = (si_.w* 0.02f) / (float)texW_;
         float padYpct = (si_.h* 0.02f) / (float)texH_;
 
-        float win11Radius = win11 ? (8.0f * ((float)displayDpi / (float)cfg::kBaseDpi)) : 0.0f;
-
         if (dropShadow)
             drawMesh(-padXpct, 1.0f + padXpct, -padYpct, 1.0f + padYpct, shadowSrv_.Get(), 0.0f, ctrl);
-        drawMesh(0.0f, 1.0f, 0.0f, 1.0f, contentSrv_.Get(), win11Radius, ctrl);
+        drawMesh(0.0f, 1.0f, 0.0f, 1.0f, contentSrv_.Get(), win11 ? (8.0f* scale) : 0.0f, ctrl);
     }
 
     void present() { swap_->Present(1, 0); }
@@ -1196,11 +945,10 @@ private:
 
 class WobblyEngine {
 public:
-    bool init(HWND overlay, const ScreenInfo& si, bool win11, const MonitorTopology* topo = nullptr) {
+    bool init(HWND overlay, const ScreenInfo& si, bool win11) {
         overlay_ = overlay;
         si_ = si;
         win11_ = win11;
-        topo_ = topo;
         return gpu_.init(overlay, si);
     }
 
@@ -1241,17 +989,11 @@ public:
             gpu_.buildShadow();
             if (!gpu_.ready()) { target_ = NULL; return; }
 
-            grabOffset_.x = pt.x - mf.left;
-            grabOffset_.y = pt.y - mf.top;
-
             {
                 std::lock_guard<std::mutex> lk(bodyMtx_);
                 body_.build((float)mf.left, (float)mf.top, (float)mfw, (float)mfh);
                 body_.setRest((float)grabber_.texW(), (float)grabber_.texH());
-                body_.updateTarget((float)mf.left, (float)mf.top, (float)grabber_.texW(), (float)grabber_.texH());
-                body_.pin((float)pt.x, (float)pt.y);
-                anchorIdx_ = body_.anchor;
-                body_.setAnchorWeights(anchorIdx_);
+                body_.pinAt((float)pt.x, (float)pt.y);
             }
             { std::lock_guard<std::mutex> lk(mouseMtx_); lastMouse_ = pt; curMouse_ = pt; }
 
@@ -1280,7 +1022,7 @@ public:
                     int mfh = mf.bottom - mf.top;
 
                     double relativeX = static_cast<double>(pt.x - rc.left) / currentWidth;
-                    int newLeft = pt.x - static_cast<int>(relativeX * normalWidth);
+                    int newLeft = pt.x - static_cast<int>(relativeX* normalWidth);
                     int newTop = rc.top;
 
                     HMONITOR srcMon = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
@@ -1311,17 +1053,11 @@ public:
                     if (nfw <= 0) { nfw = mfw; }
                     if (nfh <= 0) { nfh = mfh; }
 
-                    grabOffset_.x = pt.x - nf.left;
-                    grabOffset_.y = pt.y - nf.top;
-
                     {
                         std::lock_guard<std::mutex> lk(bodyMtx_);
                         body_.build((float)nf.left, (float)nf.top, (float)nfw, (float)nfh);
                         body_.setRest((float)grabber_.texW(), (float)grabber_.texH());
-                        body_.updateTarget((float)nf.left, (float)nf.top, (float)grabber_.texW(), (float)grabber_.texH());
-                        body_.pin((float)pt.x, (float)pt.y);
-                        anchorIdx_ = body_.anchor;
-                        body_.setAnchorWeights(anchorIdx_);
+                        body_.pinAt((float)pt.x, (float)pt.y);
                     }
                     { std::lock_guard<std::mutex> lk(mouseMtx_); lastMouse_ = pt; curMouse_ = pt; }
 
@@ -1345,18 +1081,11 @@ public:
         RECT fr = grabber_.frame();
         int fw = fr.right - fr.left;
         int fh = fr.bottom - fr.top;
-
-        grabOffset_.x = pt.x - fr.left;
-        grabOffset_.y = pt.y - fr.top;
-
         {
             std::lock_guard<std::mutex> lk(bodyMtx_);
             body_.build((float)fr.left, (float)fr.top, (float)fw, (float)fh);
             body_.setRest((float)grabber_.texW(), (float)grabber_.texH());
-            body_.updateTarget((float)fr.left, (float)fr.top, (float)grabber_.texW(), (float)grabber_.texH());
             body_.pin((float)pt.x, (float)pt.y);
-            anchorIdx_ = body_.anchor;
-            body_.setAnchorWeights(anchorIdx_);
         }
         { std::lock_guard<std::mutex> lk(mouseMtx_); lastMouse_ = pt; curMouse_ = pt; }
 
@@ -1422,8 +1151,6 @@ private:
         frameH_ = baseTexH_;
         captionH_ = baseCaptionH_;
         curScale_ = 1.0f;
-        targetScale_ = 1.0f;
-        displayDpi_ = captureDpi_;
     }
 
     void applyScale(float s) {
@@ -1439,19 +1166,10 @@ private:
         shadowOffset_.y = (LONG)(baseShadow_.y* s + 0.5f);
     }
 
-    float scaleForPoint(POINT pt, UINT* outDpi = nullptr) const {
-        UINT dpi = cfg::kBaseDpi;
-        if (topo_) {
-            const MonitorInfoEx* m = topo_->atPoint(pt);
-            if (m && m->dpi) dpi = m->dpi;
-            else dpi = dpiapi::forPoint(pt);
-        } else {
-            dpi = dpiapi::forPoint(pt);
-        }
-        if (outDpi) *outDpi = dpi;
+    float scaleForPoint(POINT pt) {
+        UINT dpi = dpiapi::forPoint(pt);
         UINT base = captureDpi_ ? captureDpi_ : cfg::kBaseDpi;
-        float rawScale = (float)dpi / (float)base;
-        return std::clamp(rawScale, 0.80f, 1.30f);
+        return dpiapi::clampScale((float)dpi / (float)base);
     }
 
     void boundsFor(float rx, float ry, float& minL, float& maxL, float& minT, float& maxT) {
@@ -1476,8 +1194,8 @@ private:
         UINT base = captureDpi_ ? captureDpi_ : cfg::kBaseDpi;
         UINT mdpi = dpiapi::forMonitor(mon);
         float vscale = (float)mdpi / (float)cfg::kBaseDpi;
-        int minVis = (int)(cfg::kMinCaptionVisible * vscale + 0.5f);
-        int maxVis = (int)(cfg::kMaxCaptionVisible * vscale + 0.5f);
+        int minVis = (int)(cfg::kMinCaptionVisible* vscale + 0.5f);
+        int maxVis = (int)(cfg::kMaxCaptionVisible* vscale + 0.5f);
         if (visX < minVis) visX = minVis;
         if (visX > maxVis) visX = maxVis;
         if (visX > frameW_) visX = frameW_;
@@ -1549,7 +1267,7 @@ private:
         BOOL ds = FALSE;
         SystemParametersInfoW(SPI_GETDROPSHADOW, 0, &ds, 0);
 
-        gpu_.drawScene(ctrl, win11_, ds != FALSE, curScale_, displayDpi_);
+        gpu_.drawScene(ctrl, win11_, ds != FALSE, curScale_);
         showOverlay(false);
         gpu_.present();
     }
@@ -1562,51 +1280,30 @@ private:
             POINT cur;
             { std::lock_guard<std::mutex> lk(mouseMtx_); cur = curMouse_; }
 
-            UINT curDpi = cfg::kBaseDpi;
-            targetScale_ = scaleForPoint(cur, &curDpi);
-            displayDpi_ = curDpi;
-            float prevScale = curScale_;
-            curScale_ += (targetScale_ - curScale_) * 0.15f;
-            if (fabsf(curScale_ - prevScale) > 0.005f) {
-                applyScale(curScale_);
-                if (prevScale > 0.0001f) {
-                    float ratio = curScale_ / prevScale;
-                    grabOffset_.x = (LONG)(grabOffset_.x * ratio);
-                    grabOffset_.y = (LONG)(grabOffset_.y * ratio);
-                }
+            POINT anchorPt;
+            {
                 std::lock_guard<std::mutex> lk(bodyMtx_);
-                body_.setRest((float)frameW_, (float)frameH_);
+                int a = (body_.anchor >= 0 && body_.anchor < (int)body_.nodes.size()) ? body_.anchor : 0;
+                anchorPt.x = (LONG)floorf(body_.nodes[a].x);
+                anchorPt.y = (LONG)floorf(body_.nodes[a].y);
             }
+            float scale = scaleForPoint(anchorPt);
+            applyScale(scale);
+            { std::lock_guard<std::mutex> lk(bodyMtx_); body_.setRest((float)frameW_, (float)frameH_); }
 
             if (dragging_.load()) {
+                float dx = (float)(cur.x - lastMouse_.x);
+                float dy = (float)(cur.y - lastMouse_.y);
                 lastMouse_ = cur;
-                {
-                    std::lock_guard<std::mutex> lk(bodyMtx_);
-                    float targetL = (float)cur.x - (float)grabOffset_.x;
-                    float targetT = (float)cur.y - (float)grabOffset_.y;
-                    if (anchorIdx_ >= 0 && anchorIdx_ < (int)body_.nodes.size()) {
-                        int ac = anchorIdx_ % cfg::kGridW;
-                        int ar = anchorIdx_ / cfg::kGridW;
-                        float sx = (float)frameW_ / float(cfg::kGridW - 1);
-                        float sy = (float)frameH_ / float(cfg::kGridH - 1);
-                        body_.setAnchorPos(targetL + ac * sx, targetT + ar * sy);
-                    }
-                    body_.updateTarget(targetL, targetT, (float)frameW_, (float)frameH_);
-                    body_.integrate(cfg::kStepIters);
-                }
+                { std::lock_guard<std::mutex> lk(bodyMtx_); body_.moveAnchor(dx, dy); body_.integrate(cfg::kStepIters); }
                 steady = 0;
             } else if (settling_.load()) {
                 bool rest;
                 {
                     std::lock_guard<std::mutex> lk(bodyMtx_);
-                    body_.tickSettleK();
+                    body_.integrate(cfg::kStepIters);
                     float minL, maxL, minT, maxT;
                     boundsFor(body_.nodes[0].x, body_.nodes[0].y, minL, maxL, minT, maxT);
-                    float fx = std::clamp(body_.nodes[0].x, minL, maxL);
-                    float fy = std::clamp(body_.nodes[0].y, minT, maxT);
-                    body_.updateTarget(fx, fy, (float)frameW_, (float)frameH_);
-
-                    body_.integrate(cfg::kStepIters);
                     body_.clampTo(minL, maxL, minT, maxT, cfg::boundRestitution);
                     rest = body_.settled();
                 }
@@ -1632,10 +1329,8 @@ private:
         if (target_ && IsWindow(target_)) {
             POINT anchorPt;
             { std::lock_guard<std::mutex> lk(bodyMtx_); anchorPt.x = (LONG)floorf(body_.nodes[0].x); anchorPt.y = (LONG)floorf(body_.nodes[0].y); }
-            UINT finalDpi = cfg::kBaseDpi;
-            float fscale = scaleForPoint(anchorPt, &finalDpi);
+            float fscale = scaleForPoint(anchorPt);
             applyScale(fscale);
-            displayDpi_ = finalDpi;
 
             float bx, by;
             {
@@ -1748,8 +1443,6 @@ private:
     POINT curMouse_ = {};
     std::mutex mouseMtx_;
     std::mutex bodyMtx_;
-    POINT grabOffset_ = {};
-    int anchorIdx_ = -1;
     POINT shadowOffset_ = {};
     POINT baseShadow_ = {};
     RECT wndRect_ = {};
@@ -1762,9 +1455,6 @@ private:
     int baseWndH_ = 0;
     int baseCaptionH_ = 0;
     UINT captureDpi_ = cfg::kBaseDpi;
-    const MonitorTopology* topo_ = nullptr;
-    UINT displayDpi_ = cfg::kBaseDpi;
-    float targetScale_ = 1.0f;
     float curScale_ = 1.0f;
     LONG_PTR origExStyle_ = 0;
     BYTE origAlpha_ = 255;
@@ -1873,7 +1563,12 @@ public:
         SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         dpiapi::init();
 
-        rebuildTopology();
+        si_.vox = GetSystemMetrics(SM_XVIRTUALSCREEN);
+        si_.voy = GetSystemMetrics(SM_YVIRTUALSCREEN);
+        si_.w = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+        si_.h = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+        if (si_.w <= 0) si_.w = GetSystemMetrics(SM_CXSCREEN);
+        if (si_.h <= 0) si_.h = GetSystemMetrics(SM_CYSCREEN);
 
         WNDCLASSW wc2 = {};
         wc2.lpfnWndProc = OverlayProc;
@@ -1887,9 +1582,7 @@ public:
             L"WobblyOverlay", L"", WS_POPUP,
             si_.vox, si_.voy, si_.w, si_.h, NULL, NULL, hInst, NULL);
 
-        if (!engine_.init(overlay_, si_, win11_, &topo_)) return false;
-        displayDirty_ = false;
-        SetTimer(overlay_, 1, 500, NULL);
+        if (!engine_.init(overlay_, si_, win11_)) return false;
 
         hook_ = SetWindowsHookExW(WH_MOUSE_LL, MouseProc, hInst, 0);
         return hook_ != NULL;
@@ -1938,34 +1631,6 @@ private:
                 if (p(&v) == 0 && v.dwBuildNumber >= 22000) win11_ = true;
             }
         }
-    }
-
-    // Re-enumerate monitors and refresh the virtual-screen bounds (si_).
-    // Called at startup and on every WM_DISPLAYCHANGE / WM_DPICHANGED.
-    void rebuildTopology() {
-        topo_.enumNow();
-        topo_.debugDump();
-        si_.vox = GetSystemMetrics(SM_XVIRTUALSCREEN);
-        si_.voy = GetSystemMetrics(SM_YVIRTUALSCREEN);
-        si_.w  = GetSystemMetrics(SM_CXVIRTUALSCREEN);
-        si_.h  = GetSystemMetrics(SM_CYVIRTUALSCREEN);
-        if (si_.w <= 0) si_.w = GetSystemMetrics(SM_CXSCREEN);
-        if (si_.h <= 0) si_.h = GetSystemMetrics(SM_CYSCREEN);
-        displayDirty_ = true;
-    }
-
-    // Recreate the overlay size + GPU engine only when idle (never mid-drag),
-    // so a resolution/orientation hotplug can't corrupt an active wobble.
-    void applyTopologyIfSafe() {
-        if (!displayDirty_) return;
-        if (engine_.isDragging() || engine_.isSettling()) return;
-        displayDirty_ = false;
-        if (overlay_ && IsWindow(overlay_)) {
-            SetWindowPos(overlay_, HWND_TOPMOST, si_.vox, si_.voy, si_.w, si_.h - 1,
-                SWP_NOACTIVATE | SWP_NOSENDCHANGING | SWP_SHOWWINDOW);
-        }
-        engine_.shutdown();
-        engine_.init(overlay_, si_, win11_, &topo_);
     }
 
     LRESULT onMouse(int nCode, WPARAM wParam, LPARAM lParam) {
@@ -2088,14 +1753,6 @@ private:
     }
 
     static LRESULT CALLBACK OverlayProc(HWND h, UINT m, WPARAM w, LPARAM l) {
-        if (m == WM_DISPLAYCHANGE || m == WM_DPICHANGED) {
-            if (s_self) s_self->rebuildTopology();
-            return 0;
-        }
-        if (m == WM_TIMER && w == 1) {
-            if (s_self) s_self->applyTopologyIfSafe();
-            return 0;
-        }
         if (m == WM_SETCURSOR) { SetCursor(LoadCursor(NULL, IDC_ARROW)); return TRUE; }
         return DefWindowProcW(h, m, w, l);
     }
@@ -2109,8 +1766,6 @@ private:
     HWND overlay_ = NULL;
     HHOOK hook_ = NULL;
     ScreenInfo si_ = {};
-    MonitorTopology topo_;
-    bool displayDirty_ = false;
     bool win11_ = false;
     bool com_init_ = false;
     WobblyEngine engine_;
@@ -2118,7 +1773,7 @@ private:
     std::atomic<bool> dragRequested_{ false };
     HWND pendingTarget_ = NULL;
     POINT pendingPt_ = {};
-    int realism_ = 1;
+    int realism_ = 3;
 };
 
 WobblyController* WobblyController::s_self = nullptr;
@@ -2249,6 +1904,9 @@ namespace {
         QSystemSemaphore& m_sem;
         bool              m_acquired;
     };
+
+    constexpr int kDonateWindowWidth  = 440;
+    constexpr int kDonateWindowHeight = 280;
 
     inline const QString kLocalServerName = QStringLiteral("Deskwarp.LocalServer.v1");
     inline const QString kStartupArg      = QStringLiteral("--background");
@@ -3254,6 +2912,100 @@ private:
     bool                 m_force_quit         = false;
     bool                 m_loading_settings   = false;
 };
+
+struct Strings {
+    QString title;
+    QString body;
+    QString button;
+    bool rtl = false;
+};
+
+[[nodiscard]] Strings localized_strings() {
+    const QLocale::Language lang = QLocale::system().language();
+    switch (lang) {
+    case QLocale::Russian:
+        return {
+            QString::fromUtf8("Поддержка"),
+            QString::fromUtf8("Здравствуйте, мне 15 лет, эта программа абсолютно бесплатная. Я буду очень благодарен вам, если вы поможете накопить мне на хорошее рабочее место. Спасибо за установку Deskwarp :)"),
+            QString::fromUtf8("Донат"), false };
+    case QLocale::Ukrainian:
+        return {
+            QString::fromUtf8("Підтримка"),
+            QString::fromUtf8("Вітаю, мені 15 років, ця програма абсолютно безкоштовна. Я буду дуже вдячний вам, якщо ви допоможете мені накопичити на гарне робоче місце. Дякую за встановлення Deskwarp :)"),
+            QString::fromUtf8("Донат"), false };
+    case QLocale::German:
+        return {
+            QString::fromUtf8("Unterstützung"),
+            QString::fromUtf8("Hallo, ich bin 15 Jahre alt und dieses Programm ist völlig kostenlos. Ich wäre Ihnen sehr dankbar, wenn Sie mir helfen würden, für einen guten Arbeitsplatz zu sparen. Danke, dass Sie Deskwarp installiert haben :)"),
+            QString::fromUtf8("Spenden"), false };
+    case QLocale::French:
+        return {
+            QString::fromUtf8("Soutien"),
+            QString::fromUtf8("Bonjour, j'ai 15 ans et ce programme est entièrement gratuit. Je vous serais très reconnaissant de m'aider à économiser pour un bon poste de travail. Merci d'avoir installé Deskwarp :)"),
+            QString::fromUtf8("Faire un don"), false };
+    case QLocale::Spanish:
+        return {
+            QString::fromUtf8("Apoyo"),
+            QString::fromUtf8("Hola, tengo 15 años y este programa es completamente gratuito. Te estaría muy agradecido si me ayudaras a ahorrar para un buen espacio de trabajo. Gracias por instalar Deskwarp :)"),
+            QString::fromUtf8("Donar"), false };
+    case QLocale::Italian:
+        return {
+            QString::fromUtf8("Supporto"),
+            QString::fromUtf8("Ciao, ho 15 anni e questo programma è completamente gratuito. Ti sarei molto grato se mi aiutassi a risparmiare per una buona postazione di lavoro. Grazie per aver installato Deskwarp :)"),
+            QString::fromUtf8("Dona"), false };
+    case QLocale::Portuguese:
+        return {
+            QString::fromUtf8("Apoio"),
+            QString::fromUtf8("Olá, tenho 15 anos e este programa é totalmente gratuito. Ficaria muito grato se você me ajudasse a juntar dinheiro para um bom espaço de trabalho. Obrigado por instalar o Deskwarp :)"),
+            QString::fromUtf8("Doar"), false };
+    case QLocale::Polish:
+        return {
+            QString::fromUtf8("Wsparcie"),
+            QString::fromUtf8("Cześć, mam 15 lat, a ten program jest całkowicie darmowy. Byłbym bardzo wdzięczny, gdybyś pomógł mi uzbierać na dobre stanowisko pracy. Dziękuję za zainstalowanie Deskwarp :)"),
+            QString::fromUtf8("Wesprzyj"), false };
+    case QLocale::Turkish:
+        return {
+            QString::fromUtf8("Destek"),
+            QString::fromUtf8("Merhaba, 15 yaşındayım ve bu program tamamen ücretsiz. İyi bir çalışma alanı için para biriktirmeme yardımcı olursanız çok minnettar olurum. Deskwarp'ı yüklediğiniz için teşekkürler :)"),
+            QString::fromUtf8("Bağış yap"), false };
+    case QLocale::Dutch:
+        return {
+            QString::fromUtf8("Ondersteuning"),
+            QString::fromUtf8("Hallo, ik ben 15 jaar oud en dit programma is volledig gratis. Ik zou je erg dankbaar zijn als je me zou helpen sparen voor een goede werkplek. Bedankt voor het installeren van Deskwarp :)"),
+            QString::fromUtf8("Doneren"), false };
+    case QLocale::Chinese:
+        return {
+            QString::fromUtf8("支持"),
+            QString::fromUtf8("您好，我今年15岁，这个程序完全免费。如果您能帮助我攒钱购置一个好的工作环境，我将非常感激。感谢您安装 Deskwarp :)"),
+            QString::fromUtf8("捐赠"), false };
+    case QLocale::Japanese:
+        return {
+            QString::fromUtf8("サポート"),
+            QString::fromUtf8("こんにちは、私は15歳です。このプログラムは完全に無料です。良い作業環境のための資金を貯めるのを手伝っていただけると、とても感謝します。Deskwarp をインストールしていただきありがとうございます :)"),
+            QString::fromUtf8("寄付する"), false };
+    case QLocale::Korean:
+        return {
+            QString::fromUtf8("후원"),
+            QString::fromUtf8("안녕하세요, 저는 15살이고 이 프로그램은 완전히 무료입니다. 좋은 작업 공간을 마련할 수 있도록 도와주시면 정말 감사하겠습니다. Deskwarp를 설치해 주셔서 감사합니다 :)"),
+            QString::fromUtf8("후원하기"), false };
+    case QLocale::Arabic:
+        return {
+            QString::fromUtf8("الدعم"),
+            QString::fromUtf8("مرحبًا، عمري 15 عامًا، وهذا البرنامج مجاني تمامًا. سأكون ممتنًا جدًا لك إذا ساعدتني في توفير المال لمكان عمل جيد. شكرًا لتثبيت Deskwarp :)"),
+            QString::fromUtf8("تبرع"), true };
+    case QLocale::English:
+    default:
+        return {
+            QString::fromUtf8("Support"),
+            QString::fromUtf8("Hello, I'm 15 years old, and this program is completely free. I would be very grateful if you could help me save up for a good workspace. Thank you for installing Deskwarp :)"),
+            QString::fromUtf8("Donate"), false };
+    }
+}
+
+[[nodiscard]] QString contrast_text_for(const QColor& bg) {
+    const double luminance = (0.299 * bg.red() + 0.587 * bg.green() + 0.114 * bg.blue()) / 255.0;
+    return luminance > 0.6 ? QStringLiteral("#000000") : QStringLiteral("#ffffff");
+}
 
 #include "app.moc"
 
