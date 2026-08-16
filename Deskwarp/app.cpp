@@ -1744,31 +1744,6 @@ private:
                                 SetWindowPos(top, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
                                 SetForegroundWindow(top);
                                 BringWindowToTop(top);
-                                static DWORD lastClickTime = 0;
-                                static HWND lastClickWnd = NULL;
-                                static POINT lastClickPt = { 0, 0 };
-                                DWORD now = GetTickCount();
-                                bool dbl = false;
-                                if (lastClickWnd == top && (now - lastClickTime) <= GetDoubleClickTime()) {
-                                    int cx = GetSystemMetrics(SM_CXDOUBLECLK);
-                                    int cy = GetSystemMetrics(SM_CYDOUBLECLK);
-                                    int ddx = pt.x - lastClickPt.x;
-                                    int ddy = pt.y - lastClickPt.y;
-                                    if (ddx >= -(cx / 2) && ddx <= (cx / 2) && ddy >= -(cy / 2) && ddy <= (cy / 2))
-                                        dbl = true;
-                                }
-                                lastClickWnd = top;
-                                lastClickTime = now;
-                                lastClickPt = pt;
-                                if (dbl) {
-                                    LONG cur = GetWindowLongW(top, GWL_STYLE);
-                                    lastClickTime = 0;
-                                    if (cur & WS_MAXIMIZEBOX) {
-                                        WPARAM sc = (cur & WS_MAXIMIZE) ? SC_RESTORE : SC_MAXIMIZE;
-                                        PostMessageW(top, WM_SYSCOMMAND, sc, 0);
-                                    }
-                                    return 1;
-                                }
                                 pendingTarget_ = top;
                                 pendingPt_ = pt;
                                 dragRequested_.store(false);
