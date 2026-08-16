@@ -108,17 +108,17 @@ namespace cfg {
     constexpr int kGridH = 4;
     constexpr int kTilesX = 32;
     constexpr int kTilesY = 32;
-    inline float friction = 3.5f;
-    inline float stiffness = 1.9f;
-    inline float mass = 30.0f;
-    inline float restVel = 0.02f;
-    inline float restPos = 0.3f;
+    inline float friction = 2.8f;
+    inline float stiffness = 1.6f;
+    inline float mass = 24.0f;
+    inline float restVel = 0.025f;
+    inline float restPos = 0.30f;
     constexpr int kStepIters = 3;
     constexpr int kRenderSleepMs = 8;
     constexpr int kCaptureSleepMs = 120;
     constexpr int kMaxSettleFrames = 1200;
     constexpr int kSteadyExit = 4;
-    inline float boundRestitution = 0.18f;
+    inline float boundRestitution = 0.20f;
     constexpr int kMinCaptionVisible = 80;
     constexpr int kMaxCaptionVisible = 320;
     constexpr UINT kBaseDpi = 96;
@@ -128,20 +128,20 @@ namespace cfg {
     inline void applyRealismLevel(int level) {
         switch (level) {
         case 1:
-            friction = 5.5f; stiffness = 3.2f; mass = 38.0f;
-            restVel = 0.01f; restPos = 0.12f; boundRestitution = 0.08f;
+            friction = 4.2f; stiffness = 2.8f; mass = 32.0f;
+            restVel = 0.015f; restPos = 0.15f; boundRestitution = 0.10f;
             break;
         case 2:
-            friction = 3.5f; stiffness = 1.9f; mass = 30.0f;
-            restVel = 0.02f; restPos = 0.3f; boundRestitution = 0.18f;
+            friction = 2.8f; stiffness = 1.6f; mass = 24.0f;
+            restVel = 0.025f; restPos = 0.30f; boundRestitution = 0.20f;
             break;
         case 3:
-            friction = 2.2f; stiffness = 1.2f; mass = 24.0f;
-            restVel = 0.035f; restPos = 0.45f; boundRestitution = 0.28f;
+            friction = 1.8f; stiffness = 0.95f; mass = 16.0f;
+            restVel = 0.035f; restPos = 0.45f; boundRestitution = 0.30f;
             break;
         default:
-            friction = 1.2f; stiffness = 0.6f; mass = 18.0f;
-            restVel = 0.055f; restPos = 0.65f; boundRestitution = 0.42f;
+            friction = 1.0f; stiffness = 0.45f; mass = 10.0f;
+            restVel = 0.050f; restPos = 0.65f; boundRestitution = 0.45f;
             break;
         }
     }
@@ -159,7 +159,7 @@ struct RTL_OSVERSIONINFOW_CUSTOM {
 typedef NTSTATUS(WINAPI* RtlGetVersionPtr)(RTL_OSVERSIONINFOW_CUSTOM*);
 
 struct GridNode { float x, y, vx, vy, fx, fy; int immobile; };
-struct GridSpring { int a, b; float restX, restY; };
+struct GridSpring { int a, b; float restLength; float kFactor; };
 struct MeshVertex { float x, y, u, v; };
 struct ShaderConstants { float screenW, screenH, p1, p2, texW, texH, radius, p3; };
 struct ScreenInfo { int vox, voy, w, h; };
@@ -303,6 +303,8 @@ public:
         baseW = w; baseH = h;
         const float sx = w / float(cfg::kGridW - 1);
         const float sy = h / float(cfg::kGridH - 1);
+        const float diagLen = sqrtf(sx * sx + sy * sy);
+
         for (int r = 0; r < cfg::kGridH; ++r) {
             for (int c = 0; c < cfg::kGridW; ++c) {
                 GridNode& n = nodes[(size_t)r* cfg::kGridW + c];
@@ -311,11 +313,25 @@ public:
                 n.y = oy + r* sy;
             }
         }
+
+        // Structural orthogonal springs (horizontal & vertical)
         for (int r = 0; r < cfg::kGridH; ++r) {
             for (int c = 0; c < cfg::kGridW; ++c) {
                 int idx = r* cfg::kGridW + c;
-                if (c < cfg::kGridW - 1) springs.push_back({ idx, idx + 1, sx, 0.0f });
-                if (r < cfg::kGridH - 1) springs.push_back({ idx, idx + cfg::kGridW, 0.0f, sy });
+                if (c < cfg::kGridW - 1) springs.push_back({ idx, idx + 1, sx, 1.0f });
+                if (r < cfg::kGridH - 1) springs.push_back({ idx, idx + cfg::kGridW, sy, 1.0f });
+            }
+        }
+
+        // Diagonal shear cross springs (Compiz & KDE Plasma authentic elasticity)
+        for (int r = 0; r < cfg::kGridH - 1; ++r) {
+            for (int c = 0; c < cfg::kGridW - 1; ++c) {
+                int idxA = r * cfg::kGridW + c;
+                int idxB = (r + 1) * cfg::kGridW + (c + 1);
+                int idxC = (r + 1) * cfg::kGridW + c;
+                int idxD = r * cfg::kGridW + (c + 1);
+                springs.push_back({ idxA, idxB, diagLen, 0.6f });
+                springs.push_back({ idxC, idxD, diagLen, 0.6f });
             }
         }
     }
@@ -324,9 +340,17 @@ public:
         baseW = w; baseH = h;
         const float sx = w / float(cfg::kGridW - 1);
         const float sy = h / float(cfg::kGridH - 1);
+        const float diagLen = sqrtf(sx * sx + sy * sy);
         for (auto& s : springs) {
-            if (s.restX != 0.0f) s.restX = sx;
-            if (s.restY != 0.0f) s.restY = sy;
+            int rA = s.a / cfg::kGridW, cA = s.a % cfg::kGridW;
+            int rB = s.b / cfg::kGridW, cB = s.b % cfg::kGridW;
+            if (rA == rB) {
+                s.restLength = sx;
+            } else if (cA == cB) {
+                s.restLength = sy;
+            } else {
+                s.restLength = diagLen;
+            }
         }
     }
 
@@ -358,8 +382,8 @@ public:
             nodes[anchor].y += dy;
             float stepVx = dx / (float)cfg::kStepIters;
             float stepVy = dy / (float)cfg::kStepIters;
-            nodes[anchor].vx = (nodes[anchor].vx *0.5f) + (stepVx* 0.5f);
-            nodes[anchor].vy = (nodes[anchor].vy *0.5f) + (stepVy* 0.5f);
+            nodes[anchor].vx = (nodes[anchor].vx * 0.4f) + (stepVx * 0.6f);
+            nodes[anchor].vy = (nodes[anchor].vy * 0.4f) + (stepVy * 0.6f);
         }
     }
 
@@ -369,16 +393,40 @@ public:
 
     void integrate(int iters) {
         for (int it = 0; it < iters; ++it) {
-            for (auto& s : springs) {
-                float fx = stiffness* (nodes[s.b].x - nodes[s.a].x - s.restX);
-                nodes[s.a].fx += fx; nodes[s.b].fx -= fx;
-                float fy = stiffness* (nodes[s.b].y - nodes[s.a].y - s.restY);
-                nodes[s.a].fy += fy; nodes[s.b].fy -= fy;
+            // 2D Euclidean Hooke's Law with Relative Damping
+            for (const auto& s : springs) {
+                const float dx = nodes[s.b].x - nodes[s.a].x;
+                const float dy = nodes[s.b].y - nodes[s.a].y;
+                const float distSq = dx * dx + dy * dy;
+                if (distSq < 1e-6f) continue;
+
+                const float dist = sqrtf(distSq);
+                const float delta = dist - s.restLength;
+                const float springK = stiffness * s.kFactor;
+                const float fMagnitude = springK * delta;
+
+                const float nx = dx / dist;
+                const float ny = dy / dist;
+
+                float fx = fMagnitude * nx;
+                float fy = fMagnitude * ny;
+
+                const float rvx = nodes[s.b].vx - nodes[s.a].vx;
+                const float rvy = nodes[s.b].vy - nodes[s.a].vy;
+                const float rVelProj = (rvx * nx + rvy * ny) * 0.15f * friction;
+                fx += rVelProj * nx;
+                fy += rVelProj * ny;
+
+                nodes[s.a].fx += fx;
+                nodes[s.a].fy += fy;
+                nodes[s.b].fx -= fx;
+                nodes[s.b].fy -= fy;
             }
+
             for (auto& n : nodes) {
                 if (!n.immobile) {
-                    n.fx -= friction* n.vx;
-                    n.fy -= friction* n.vy;
+                    n.fx -= friction * n.vx;
+                    n.fy -= friction * n.vy;
                     n.vx += n.fx / mass;
                     n.vy += n.fy / mass;
                     n.x += n.vx;
@@ -1046,13 +1094,23 @@ public:
                     int mfh = mf.bottom - mf.top;
 
                     double relativeX = static_cast<double>(pt.x - rc.left) / currentWidth;
-                    int newLeft = pt.x - static_cast<int>(relativeX * normalWidth);
+                    int newLeft = pt.x - static_cast<int>(relativeX* normalWidth);
                     int newTop = rc.top;
+
+                    HMONITOR srcMon = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
+                    MONITORINFO srcMi; srcMi.cbSize = sizeof(srcMi);
+                    RECT srcWork = {};
+                    if (GetMonitorInfoW(srcMon, &srcMi)) srcWork = srcMi.rcWork;
+                    else SystemParametersInfoW(SPI_GETWORKAREA, 0, &srcWork, 0);
 
                     captureLayeredState(target);
 
-                    ShowWindow(target, SW_RESTORE);
-                    SetWindowPos(target, HWND_TOP, newLeft, newTop, normalWidth, normalHeight, SWP_NOACTIVATE | SWP_FRAMECHANGED);
+                    wp.showCmd = SW_SHOWNORMAL;
+                    wp.rcNormalPosition.left = newLeft - srcWork.left;
+                    wp.rcNormalPosition.top = newTop - srcWork.top;
+                    wp.rcNormalPosition.right = wp.rcNormalPosition.left + normalWidth;
+                    wp.rcNormalPosition.bottom = wp.rcNormalPosition.top + normalHeight;
+                    SetWindowPlacement(target, &wp);
 
                     if (!grabber_.prepare(target)) { target_ = NULL; return; }
                     cacheGeometry();
@@ -1234,10 +1292,6 @@ private:
     void captureLayeredState(HWND w) {
         origExStyle_ = GetWindowLongPtrW(w, GWL_EXSTYLE);
         origLayered_ = (origExStyle_ & WS_EX_LAYERED) != 0;
-        origPlacement_ = { sizeof(WINDOWPLACEMENT) };
-        if (!GetWindowPlacement(w, &origPlacement_)) {
-            origPlacement_.length = 0;
-        }
         if (origLayered_) {
             if (!GetLayeredWindowAttributes(w, NULL, &origAlpha_, &origFlags_)) {
                 origAlpha_ = 255; origFlags_ = LWA_ALPHA;
@@ -1361,26 +1415,42 @@ private:
             }
             int fl = (int)floorf(bx + 0.5f);
             int ft = (int)floorf(by + 0.5f);
-            int sox = (int)(baseShadow_.x * fscale + 0.5f);
-            int soy = (int)(baseShadow_.y * fscale + 0.5f);
+            int sox = (int)(baseShadow_.x* fscale + 0.5f);
+            int soy = (int)(baseShadow_.y* fscale + 0.5f);
             int nl = fl - sox;
             int nt = ft - soy;
+            SetWindowPos(target_, HWND_TOP, nl, nt, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOSENDCHANGING);
+
+            {
+                WINDOWPLACEMENT fwp = { sizeof(WINDOWPLACEMENT) };
+                if (GetWindowPlacement(target_, &fwp)) {
+                    RECT cr;
+                    if (GetWindowRect(target_, &cr)) {
+                        int curW = cr.right - cr.left;
+                        int curH = cr.bottom - cr.top;
+                        RECT finalRect = { nl, nt, nl + curW, nt + curH };
+                        HMONITOR fmon = MonitorFromRect(&finalRect, MONITOR_DEFAULTTONEAREST);
+                        MONITORINFO fmi; fmi.cbSize = sizeof(fmi);
+                        if (fmon && GetMonitorInfoW(fmon, &fmi)) {
+                            OffsetRect(&finalRect, fmi.rcMonitor.left - fmi.rcWork.left, fmi.rcMonitor.top - fmi.rcWork.top);
+                        }
+                        fwp.flags = 0;
+                        fwp.showCmd = SW_SHOWNORMAL;
+                        fwp.rcNormalPosition = finalRect;
+                        SetWindowPlacement(target_, &fwp);
+                    }
+                }
+            }
 
             if (origLayered_) {
                 SetLayeredWindowAttributes(target_, 0, origAlpha_, origFlags_);
+                SetWindowPos(target_, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOSENDCHANGING);
             } else {
                 SetLayeredWindowAttributes(target_, 0, 255, LWA_ALPHA);
                 SetWindowLongPtrW(target_, GWL_EXSTYLE, origExStyle_);
+                SetWindowPos(target_, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_NOSENDCHANGING);
                 RedrawWindow(target_, NULL, NULL, RDW_ERASE | RDW_INVALIDATE | RDW_FRAME | RDW_ALLCHILDREN);
             }
-
-            SetWindowPos(target_, HWND_TOP, nl, nt, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_NOSENDCHANGING);
-
-            DwmFlush();
-
-            BOOL disableTransitions = FALSE;
-            DwmSetWindowAttribute(target_, 3, &disableTransitions, sizeof(disableTransitions));
-
             SetForegroundWindow(target_);
             BringWindowToTop(target_);
 
@@ -1461,7 +1531,6 @@ private:
     BYTE origAlpha_ = 255;
     DWORD origFlags_ = 0;
     bool origLayered_ = false;
-    WINDOWPLACEMENT origPlacement_ = { sizeof(WINDOWPLACEMENT) };
     int pendingSnap_ = 0;
 };
 
