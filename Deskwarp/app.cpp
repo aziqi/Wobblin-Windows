@@ -3146,13 +3146,8 @@ int main(int argc, char* argv[]) {
             client->deleteLater();
         });
 
-        if (background_launch) {
-            (void)window.winId();
-            (void)window.ensureWobblyEngine();
-        } else {
-            window.show();
-            (void)window.ensureWobblyEngine();
-        }
+        (void)window.winId();
+        (void)window.ensureWobblyEngine();
 
         const int rc = app.exec();
         if (shared.isAttached()) {
