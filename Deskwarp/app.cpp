@@ -1586,7 +1586,7 @@ bool has_background_arg(int argc, char* argv[]) {
 } // namespace
 #endif
 
-static std::atomic<int> s_replayingClicks{ 0 };
+#define DESKWARP_CLICK_INJECTED_MAGIC 0xDE5C0A19
 
 class WobblyController {
 public:
@@ -1672,18 +1672,31 @@ public:
     int realismLevel() const { return realism_; }
 
     bool handleUiMessage(UINT msg, WPARAM, LPARAM) {
-        if (msg != WM_USER + 1) return false;
-        HWND target = pendingTarget_;
-        POINT pt = pendingPt_;
-        pendingTarget_ = NULL;
-        dragRequested_.store(false);
-        if (target && !engine_.isDragging() && !engine_.isSettling()) {
-            SetWindowPos(target, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOSENDCHANGING);
-            SetForegroundWindow(target);
-            BringWindowToTop(target);
-            engine_.beginDrag(target, pt);
+        if (msg == WM_USER + 1) {
+            HWND target = pendingTarget_;
+            POINT pt = pendingPt_;
+            pendingTarget_ = NULL;
+            dragRequested_.store(false);
+            if (target && !engine_.isDragging() && !engine_.isSettling()) {
+                SetWindowPos(target, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOSENDCHANGING);
+                SetForegroundWindow(target);
+                BringWindowToTop(target);
+                engine_.beginDrag(target, pt);
+            }
+            return true;
         }
-        return true;
+        if (msg == WM_USER + 2) {
+            INPUT inputs[2] = {};
+            inputs[0].type = INPUT_MOUSE;
+            inputs[0].mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
+            inputs[0].mi.dwExtraInfo = DESKWARP_CLICK_INJECTED_MAGIC;
+            inputs[1].type = INPUT_MOUSE;
+            inputs[1].mi.dwFlags = MOUSEEVENTF_LEFTUP;
+            inputs[1].mi.dwExtraInfo = DESKWARP_CLICK_INJECTED_MAGIC;
+            SendInput(2, inputs, sizeof(INPUT));
+            return true;
+        }
+        return false;
     }
 
 private:
@@ -1700,9 +1713,11 @@ private:
     }
 
     LRESULT onMouse(int nCode, WPARAM wParam, LPARAM lParam) {
-        if (s_replayingClicks.load() > 0) {
-            s_replayingClicks.fetch_sub(1);
-            return CallNextHookEx(hook_, nCode, wParam, lParam);
+        if (nCode >= 0) {
+            MSLLHOOKSTRUCT* ms = (MSLLHOOKSTRUCT*)lParam;
+            if (ms && ms->dwExtraInfo == DESKWARP_CLICK_INJECTED_MAGIC) {
+                return CallNextHookEx(hook_, nCode, wParam, lParam);
+            }
         }
         if (nCode >= 0 && enabled_.load()) {
             MSLLHOOKSTRUCT* ms = (MSLLHOOKSTRUCT*)lParam;
@@ -1770,14 +1785,9 @@ private:
                 if (pendingTarget_ != NULL && !engine_.isDragging()) {
                     pendingTarget_ = NULL;
                     dragRequested_.store(false);
-
-                    s_replayingClicks.store(2);
-                    INPUT inputs[2] = {};
-                    inputs[0].type = INPUT_MOUSE;
-                    inputs[0].mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
-                    inputs[1].type = INPUT_MOUSE;
-                    inputs[1].mi.dwFlags = MOUSEEVENTF_LEFTUP;
-                    SendInput(2, inputs, sizeof(INPUT));
+                    if (ui_hwnd_) {
+                        PostMessageW(ui_hwnd_, WM_USER + 2, 0, 0);
+                    }
                     return 1;
                 }
                 if (engine_.isDragging()) {
