@@ -108,17 +108,18 @@ namespace cfg {
     constexpr int kGridH = 4;
     constexpr int kTilesX = 32;
     constexpr int kTilesY = 32;
-    inline float friction = 3.5f;
-    inline float stiffness = 1.9f;
-    inline float mass = 30.0f;
+    inline float friction = 3.2f;
+    inline float stiffness = 2.0f;
+    inline float mass = 22.0f;
     inline float restVel = 0.02f;
     inline float restPos = 0.3f;
+    inline float inertiaGradient = 2.0f;
     constexpr int kStepIters = 3;
     constexpr int kRenderSleepMs = 8;
     constexpr int kCaptureSleepMs = 120;
     constexpr int kMaxSettleFrames = 1200;
     constexpr int kSteadyExit = 4;
-    inline float boundRestitution = 0.18f;
+    inline float boundRestitution = 0.20f;
     constexpr int kMinCaptionVisible = 80;
     constexpr int kMaxCaptionVisible = 320;
     constexpr UINT kBaseDpi = 96;
@@ -128,19 +129,27 @@ namespace cfg {
     inline void applyRealismLevel(int level) {
         switch (level) {
         case 1:
-            friction = 5.5f; stiffness = 3.2f; mass = 38.0f;
+            // Level 1: Subtle Pro (Crisp, Responsive, Zero Excess Wobble)
+            friction = 5.2f; stiffness = 3.6f; mass = 28.0f;
+            inertiaGradient = 1.3f;
             restVel = 0.01f; restPos = 0.12f; boundRestitution = 0.08f;
             break;
         case 2:
-            friction = 3.5f; stiffness = 1.9f; mass = 30.0f;
-            restVel = 0.02f; restPos = 0.3f; boundRestitution = 0.18f;
+            // Level 2: KDE Plasma Natural (Classic Smooth Linux Experience)
+            friction = 3.2f; stiffness = 2.0f; mass = 22.0f;
+            inertiaGradient = 2.0f;
+            restVel = 0.02f; restPos = 0.30f; boundRestitution = 0.20f;
             break;
         case 3:
-            friction = 2.2f; stiffness = 1.2f; mass = 24.0f;
-            restVel = 0.035f; restPos = 0.45f; boundRestitution = 0.28f;
+            // Level 3: Compiz Classic 3D (Bouncy Fluid Jelly Wave)
+            friction = 1.9f; stiffness = 1.1f; mass = 16.0f;
+            inertiaGradient = 2.7f;
+            restVel = 0.035f; restPos = 0.45f; boundRestitution = 0.30f;
             break;
         default:
-            friction = 1.2f; stiffness = 0.6f; mass = 18.0f;
+            // Level 4: Hyper Pudding / Squishy Jello (Maximum Fun Elasticity)
+            friction = 1.0f; stiffness = 0.52f; mass = 11.0f;
+            inertiaGradient = 3.5f;
             restVel = 0.055f; restPos = 0.65f; boundRestitution = 0.42f;
             break;
         }
@@ -158,7 +167,7 @@ struct RTL_OSVERSIONINFOW_CUSTOM {
 };
 typedef NTSTATUS(WINAPI* RtlGetVersionPtr)(RTL_OSVERSIONINFOW_CUSTOM*);
 
-struct GridNode { float x, y, vx, vy, fx, fy; int immobile; };
+struct GridNode { float x, y, vx, vy, fx, fy; int immobile; float massMul; };
 struct GridSpring { int a, b; float restX, restY; };
 struct MeshVertex { float x, y, u, v; };
 struct ShaderConstants { float screenW, screenH, p1, p2, texW, texH, radius, p3; };
@@ -303,12 +312,16 @@ public:
         baseW = w; baseH = h;
         const float sx = w / float(cfg::kGridW - 1);
         const float sy = h / float(cfg::kGridH - 1);
+
         for (int r = 0; r < cfg::kGridH; ++r) {
+            float rowT = float(r) / float(cfg::kGridH - 1);
+            float rowMassMul = 1.0f + (cfg::inertiaGradient - 1.0f) * rowT;
             for (int c = 0; c < cfg::kGridW; ++c) {
                 GridNode& n = nodes[(size_t)r* cfg::kGridW + c];
                 n = GridNode{};
                 n.x = ox + c* sx;
                 n.y = oy + r* sy;
+                n.massMul = rowMassMul;
             }
         }
         for (int r = 0; r < cfg::kGridH; ++r) {
@@ -327,6 +340,14 @@ public:
         for (auto& s : springs) {
             if (s.restX != 0.0f) s.restX = sx;
             if (s.restY != 0.0f) s.restY = sy;
+        }
+        for (int r = 0; r < cfg::kGridH; ++r) {
+            float rowT = float(r) / float(cfg::kGridH - 1);
+            float rowMassMul = 1.0f + (cfg::inertiaGradient - 1.0f) * rowT;
+            for (int c = 0; c < cfg::kGridW; ++c) {
+                size_t idx = (size_t)r * cfg::kGridW + c;
+                if (idx < nodes.size()) nodes[idx].massMul = rowMassMul;
+            }
         }
     }
 
@@ -353,18 +374,37 @@ public:
     }
 
     void moveAnchor(float dx, float dy) {
-        if (anchor >= 0) {
+        if (anchor >= 0 && anchor < (int)nodes.size()) {
+            int anchorRow = anchor / cfg::kGridW;
+            int anchorCol = anchor % cfg::kGridW;
+
             nodes[anchor].x += dx;
             nodes[anchor].y += dy;
             float stepVx = dx / (float)cfg::kStepIters;
             float stepVy = dy / (float)cfg::kStepIters;
-            nodes[anchor].vx = (nodes[anchor].vx * 0.5f) + (stepVx * 0.5f);
-            nodes[anchor].vy = (nodes[anchor].vy * 0.5f) + (stepVy * 0.5f);
+            nodes[anchor].vx = (nodes[anchor].vx * 0.45f) + (stepVx * 0.55f);
+            nodes[anchor].vy = (nodes[anchor].vy * 0.45f) + (stepVy * 0.55f);
+
+            // Spatial influence on neighboring top-row nodes to prevent single-point sharp pinch
+            if (anchorRow == 0) {
+                for (int c = 0; c < cfg::kGridW; ++c) {
+                    if (c == anchorCol) continue;
+                    float dist = fabsf((float)(c - anchorCol));
+                    float weight = expf(-0.5f * dist * dist) * 0.42f;
+                    nodes[c].x += dx * weight;
+                    nodes[c].y += dy * weight;
+                    nodes[c].vx = (nodes[c].vx * 0.6f) + (stepVx * weight * 0.4f);
+                    nodes[c].vy = (nodes[c].vy * 0.6f) + (stepVy * weight * 0.4f);
+                }
+            }
         }
     }
 
     void release() {
-        if (anchor >= 0) { nodes[anchor].immobile = 0; anchor = -1; }
+        if (anchor >= 0 && anchor < (int)nodes.size()) {
+            nodes[anchor].immobile = 0;
+            anchor = -1;
+        }
     }
 
     void integrate(int iters) {
@@ -377,10 +417,11 @@ public:
             }
             for (auto& n : nodes) {
                 if (!n.immobile) {
+                    float nodeMass = mass * (n.massMul > 0.1f ? n.massMul : 1.0f);
                     n.fx -= friction* n.vx;
                     n.fy -= friction* n.vy;
-                    n.vx += n.fx / mass;
-                    n.vy += n.fy / mass;
+                    n.vx += n.fx / nodeMass;
+                    n.vy += n.fy / nodeMass;
                     n.x += n.vx;
                     n.y += n.vy;
                 }
