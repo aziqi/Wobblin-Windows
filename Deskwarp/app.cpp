@@ -496,15 +496,18 @@ public:
 
     void pin(float x, float y) {
         anchor = nearest(x, y);
-        GridNode& n = nodes[anchor];
-        n.immobile = 1; n.vx = n.vy = n.fx = n.fy = 0.0f;
+        if (anchor >= 0 && anchor < (int)nodes.size()) {
+            GridNode& n = nodes[anchor];
+            n.immobile = 1; n.vx = n.vy = n.fx = n.fy = 0.0f;
+        }
     }
 
     void pinAt(float x, float y) {
         anchor = nearest(x, y);
-        GridNode& n = nodes[anchor];
-        n.x = x; n.y = y;
-        n.immobile = 1; n.vx = n.vy = n.fx = n.fy = 0.0f;
+        if (anchor >= 0 && anchor < (int)nodes.size()) {
+            GridNode& n = nodes[anchor];
+            n.immobile = 1; n.vx = n.vy = n.fx = n.fy = 0.0f;
+        }
     }
 
     void setAnchorPos(float x, float y) {
@@ -528,7 +531,10 @@ public:
     }
 
     void release() {
-        if (anchor >= 0) { nodes[anchor].immobile = 0; anchor = -1; }
+        if (anchor >= 0 && anchor < (int)nodes.size()) {
+            nodes[anchor].immobile = 0;
+            anchor = -1;
+        }
     }
 
     void integrate(int iters) {
@@ -585,33 +591,44 @@ public:
                 n.fx = 0.0f; n.fy = 0.0f;
             }
 
-            // (d) Safe anti-inversion clamp only (prevents extreme mesh folding)
-            for (const auto& s : springs) {
-                float restLen = std::sqrt(s.restX * s.restX + s.restY * s.restY);
-                if (restLen < 1.0f) continue;
-                float dx = nodes[s.b].x - nodes[s.a].x;
-                float dy = nodes[s.b].y - nodes[s.a].y;
-                float curLen = std::sqrt(dx * dx + dy * dy);
-                if (curLen < 0.001f) continue;
+            // (d) Strict Monotonic Non-Inversion Barrier
+            // Enforces that columns and rows maintain strictly positive spacing, preventing any folding
+            const float minGapX = sx * 0.20f;
+            for (int r = 0; r < cfg::kGridH; ++r) {
+                for (int c = 0; c < cfg::kGridW - 1; ++c) {
+                    int i1 = r * cfg::kGridW + c;
+                    int i2 = r * cfg::kGridW + c + 1;
+                    float diff = nodes[i2].x - nodes[i1].x;
+                    if (diff < minGapX) {
+                        float overlap = (minGapX - diff) * 0.5f;
+                        if (!nodes[i1].immobile && !nodes[i2].immobile) {
+                            nodes[i1].x -= overlap;
+                            nodes[i2].x += overlap;
+                        } else if (!nodes[i1].immobile) {
+                            nodes[i1].x -= overlap * 2.0f;
+                        } else if (!nodes[i2].immobile) {
+                            nodes[i2].x += overlap * 2.0f;
+                        }
+                    }
+                }
+            }
 
-                float minLen = restLen * 0.40f;
-                float maxLen = restLen * 2.50f;
-                if (curLen > maxLen || curLen < minLen) {
-                    float targetLen = std::clamp(curLen, minLen, maxLen);
-                    float factor = (targetLen - curLen) / curLen * 0.5f;
-                    float corrX = dx * factor;
-                    float corrY = dy * factor;
-                    if (!nodes[s.a].immobile && !nodes[s.b].immobile) {
-                        nodes[s.a].x -= corrX;
-                        nodes[s.a].y -= corrY;
-                        nodes[s.b].x += corrX;
-                        nodes[s.b].y += corrY;
-                    } else if (!nodes[s.a].immobile) {
-                        nodes[s.a].x -= corrX * 2.0f;
-                        nodes[s.a].y -= corrY * 2.0f;
-                    } else if (!nodes[s.b].immobile) {
-                        nodes[s.b].x += corrX * 2.0f;
-                        nodes[s.b].y += corrY * 2.0f;
+            const float minGapY = sy * 0.20f;
+            for (int c = 0; c < cfg::kGridW; ++c) {
+                for (int r = 0; r < cfg::kGridH - 1; ++r) {
+                    int i1 = r * cfg::kGridW + c;
+                    int i2 = (r + 1) * cfg::kGridW + c;
+                    float diff = nodes[i2].y - nodes[i1].y;
+                    if (diff < minGapY) {
+                        float overlap = (minGapY - diff) * 0.5f;
+                        if (!nodes[i1].immobile && !nodes[i2].immobile) {
+                            nodes[i1].y -= overlap;
+                            nodes[i2].y += overlap;
+                        } else if (!nodes[i1].immobile) {
+                            nodes[i1].y -= overlap * 2.0f;
+                        } else if (!nodes[i2].immobile) {
+                            nodes[i2].y += overlap * 2.0f;
+                        }
                     }
                 }
             }
@@ -1232,7 +1249,7 @@ public:
                 body_.build((float)mf.left, (float)mf.top, (float)mfw, (float)mfh);
                 body_.setRest((float)grabber_.texW(), (float)grabber_.texH());
                 body_.updateTarget((float)mf.left, (float)mf.top, (float)grabber_.texW(), (float)grabber_.texH());
-                body_.pinAt((float)pt.x, (float)pt.y);
+                body_.pin((float)pt.x, (float)pt.y);
                 anchorIdx_ = body_.anchor;
                 body_.setAnchorWeights(anchorIdx_);
             }
@@ -1302,7 +1319,7 @@ public:
                         body_.build((float)nf.left, (float)nf.top, (float)nfw, (float)nfh);
                         body_.setRest((float)grabber_.texW(), (float)grabber_.texH());
                         body_.updateTarget((float)nf.left, (float)nf.top, (float)grabber_.texW(), (float)grabber_.texH());
-                        body_.pinAt((float)pt.x, (float)pt.y);
+                        body_.pin((float)pt.x, (float)pt.y);
                         anchorIdx_ = body_.anchor;
                         body_.setAnchorWeights(anchorIdx_);
                     }
@@ -1337,7 +1354,7 @@ public:
             body_.build((float)fr.left, (float)fr.top, (float)fw, (float)fh);
             body_.setRest((float)grabber_.texW(), (float)grabber_.texH());
             body_.updateTarget((float)fr.left, (float)fr.top, (float)grabber_.texW(), (float)grabber_.texH());
-            body_.pinAt((float)pt.x, (float)pt.y);
+            body_.pin((float)pt.x, (float)pt.y);
             anchorIdx_ = body_.anchor;
             body_.setAnchorWeights(anchorIdx_);
         }
@@ -1565,10 +1582,16 @@ private:
                 lastMouse_ = cur;
                 {
                     std::lock_guard<std::mutex> lk(bodyMtx_);
-                    body_.setAnchorPos((float)cur.x, (float)cur.y);
-                    body_.updateTarget((float)cur.x - (float)grabOffset_.x,
-                                       (float)cur.y - (float)grabOffset_.y,
-                                       (float)frameW_, (float)frameH_);
+                    float targetL = (float)cur.x - (float)grabOffset_.x;
+                    float targetT = (float)cur.y - (float)grabOffset_.y;
+                    if (anchorIdx_ >= 0 && anchorIdx_ < (int)body_.nodes.size()) {
+                        int ac = anchorIdx_ % cfg::kGridW;
+                        int ar = anchorIdx_ / cfg::kGridW;
+                        float sx = (float)frameW_ / float(cfg::kGridW - 1);
+                        float sy = (float)frameH_ / float(cfg::kGridH - 1);
+                        body_.setAnchorPos(targetL + ac * sx, targetT + ar * sy);
+                    }
+                    body_.updateTarget(targetL, targetT, (float)frameW_, (float)frameH_);
                     body_.integrate(cfg::kStepIters);
                 }
                 steady = 0;
