@@ -1367,40 +1367,18 @@ private:
             }
             int fl = (int)floorf(bx + 0.5f);
             int ft = (int)floorf(by + 0.5f);
-            int sox = (int)(baseShadow_.x* fscale + 0.5f);
-            int soy = (int)(baseShadow_.y* fscale + 0.5f);
+            int sox = (int)(baseShadow_.x * fscale + 0.5f);
+            int soy = (int)(baseShadow_.y * fscale + 0.5f);
             int nl = fl - sox;
             int nt = ft - soy;
-            SetWindowPos(target_, HWND_TOP, nl, nt, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOSENDCHANGING);
-
-            {
-                WINDOWPLACEMENT fwp = { sizeof(WINDOWPLACEMENT) };
-                if (GetWindowPlacement(target_, &fwp)) {
-                    RECT cr;
-                    if (GetWindowRect(target_, &cr)) {
-                        int curW = cr.right - cr.left;
-                        int curH = cr.bottom - cr.top;
-                        RECT finalRect = { nl, nt, nl + curW, nt + curH };
-                        HMONITOR fmon = MonitorFromRect(&finalRect, MONITOR_DEFAULTTONEAREST);
-                        MONITORINFO fmi; fmi.cbSize = sizeof(fmi);
-                        if (fmon && GetMonitorInfoW(fmon, &fmi)) {
-                            OffsetRect(&finalRect, fmi.rcMonitor.left - fmi.rcWork.left, fmi.rcMonitor.top - fmi.rcWork.top);
-                        }
-                        fwp.flags = 0;
-                        fwp.showCmd = SW_SHOWNORMAL;
-                        fwp.rcNormalPosition = finalRect;
-                        SetWindowPlacement(target_, &fwp);
-                    }
-                }
-            }
 
             if (origLayered_) {
                 SetLayeredWindowAttributes(target_, 0, origAlpha_, origFlags_);
-                SetWindowPos(target_, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOSENDCHANGING);
+                SetWindowPos(target_, HWND_TOP, nl, nt, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE | SWP_FRAMECHANGED);
             } else {
                 SetLayeredWindowAttributes(target_, 0, 255, LWA_ALPHA);
                 SetWindowLongPtrW(target_, GWL_EXSTYLE, origExStyle_);
-                SetWindowPos(target_, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_NOSENDCHANGING);
+                SetWindowPos(target_, HWND_TOP, nl, nt, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE | SWP_FRAMECHANGED);
                 RedrawWindow(target_, NULL, NULL, RDW_ERASE | RDW_INVALIDATE | RDW_FRAME | RDW_ALLCHILDREN);
             }
             SetForegroundWindow(target_);
