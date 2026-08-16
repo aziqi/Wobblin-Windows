@@ -1586,6 +1586,8 @@ bool has_background_arg(int argc, char* argv[]) {
 } // namespace
 #endif
 
+static std::atomic<int> s_replayingClicks{ 0 };
+
 class WobblyController {
 public:
     static bool ensureElevated(int argc, char* argv[]) {
@@ -1698,6 +1700,10 @@ private:
     }
 
     LRESULT onMouse(int nCode, WPARAM wParam, LPARAM lParam) {
+        if (s_replayingClicks.load() > 0) {
+            s_replayingClicks.fetch_sub(1);
+            return CallNextHookEx(hook_, nCode, wParam, lParam);
+        }
         if (nCode >= 0 && enabled_.load()) {
             MSLLHOOKSTRUCT* ms = (MSLLHOOKSTRUCT*)lParam;
             if (wParam == WM_LBUTTONDOWN && !engine_.isDragging() && !engine_.isSettling() && pendingTarget_ == NULL) {
@@ -1789,6 +1795,14 @@ private:
                 if (pendingTarget_ != NULL && !engine_.isDragging()) {
                     pendingTarget_ = NULL;
                     dragRequested_.store(false);
+
+                    s_replayingClicks.store(2);
+                    INPUT inputs[2] = {};
+                    inputs[0].type = INPUT_MOUSE;
+                    inputs[0].mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
+                    inputs[1].type = INPUT_MOUSE;
+                    inputs[1].mi.dwFlags = MOUSEEVENTF_LEFTUP;
+                    SendInput(2, inputs, sizeof(INPUT));
                     return 1;
                 }
                 if (engine_.isDragging()) {
