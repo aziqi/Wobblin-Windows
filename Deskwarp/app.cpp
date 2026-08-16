@@ -1004,7 +1004,7 @@ public:
             int mfh = mf.bottom - mf.top;
 
             captureLayeredState(target);
-            SendMessageW(target, WM_SYSCOMMAND, SC_RESTORE, 0);
+            SendMessageTimeoutW(target, WM_SYSCOMMAND, SC_RESTORE, 0, SMTO_ABORTIFHUNG | SMTO_NORMAL, 100, nullptr);
 
             if (!grabber_.prepare(target)) { target_ = NULL; return; }
             cacheGeometry();
@@ -1341,15 +1341,6 @@ private:
                 }
                 if (rest || pendingSnap_ != 0) ++steady; else steady = 0;
                 if (steady > cfg::kSteadyExit || frame > cfg::kMaxSettleFrames || pendingSnap_ != 0) break;
-            }
-
-            if (target_ && IsWindow(target_)) {
-                float bx, by;
-                { std::lock_guard<std::mutex> lk(bodyMtx_); bx = body_.nodes[0].x; by = body_.nodes[0].y; }
-                int fl = (int)floorf(bx + 0.5f);
-                int ft = (int)floorf(by + 0.5f);
-                SetWindowPos(target_, NULL, fl - shadowOffset_.x, ft - shadowOffset_.y, 0, 0,
-                    SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOREDRAW | SWP_NOSENDCHANGING | SWP_ASYNCWINDOWPOS);
             }
 
             renderFrame();
@@ -1705,24 +1696,8 @@ private:
                                     }
                                 }
                                 SetWindowPos(top, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
-                                HWND fg = GetForegroundWindow();
-                                if (fg != top) {
-                                    DWORD fgT = GetWindowThreadProcessId(fg, NULL);
-                                    DWORD tgT = GetWindowThreadProcessId(top, NULL);
-                                    DWORD myT = GetCurrentThreadId();
-                                    if (fgT != 0 && fgT != myT) AttachThreadInput(myT, fgT, TRUE);
-                                    if (tgT != 0 && tgT != myT && tgT != fgT) AttachThreadInput(myT, tgT, TRUE);
-                                    DWORD lockTO = 0;
-                                    SystemParametersInfoW(SPI_GETFOREGROUNDLOCKTIMEOUT, 0, &lockTO, 0);
-                                    SystemParametersInfoW(SPI_SETFOREGROUNDLOCKTIMEOUT, 0, 0, SPIF_SENDCHANGE);
-                                    SetForegroundWindow(top);
-                                    BringWindowToTop(top);
-                                    SetActiveWindow(top);
-                                    SetFocus(top);
-                                    SystemParametersInfoW(SPI_SETFOREGROUNDLOCKTIMEOUT, 0, (PVOID)(ULONG_PTR)lockTO, SPIF_SENDCHANGE);
-                                    if (tgT != 0 && tgT != myT && tgT != fgT) AttachThreadInput(myT, tgT, FALSE);
-                                    if (fgT != 0 && fgT != myT) AttachThreadInput(myT, fgT, FALSE);
-                                }
+                                SetForegroundWindow(top);
+                                BringWindowToTop(top);
                                 static DWORD lastClickTime = 0;
                                 static HWND lastClickWnd = NULL;
                                 static POINT lastClickPt = { 0, 0 };
