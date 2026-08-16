@@ -1381,6 +1381,30 @@ private:
                 SetWindowPos(target_, HWND_TOP, nl, nt, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE | SWP_FRAMECHANGED);
                 RedrawWindow(target_, NULL, NULL, RDW_ERASE | RDW_INVALIDATE | RDW_FRAME | RDW_ALLCHILDREN);
             }
+
+            {
+                WINDOWPLACEMENT wp = { sizeof(WINDOWPLACEMENT) };
+                if (GetWindowPlacement(target_, &wp)) {
+                    RECT cr;
+                    if (GetWindowRect(target_, &cr)) {
+                        HMONITOR hMon = MonitorFromRect(&cr, MONITOR_DEFAULTTONEAREST);
+                        MONITORINFO mi;
+                        mi.cbSize = sizeof(mi);
+                        if (hMon && GetMonitorInfoW(hMon, &mi)) {
+                            wp.rcNormalPosition.left = cr.left - mi.rcWork.left + mi.rcMonitor.left;
+                            wp.rcNormalPosition.top = cr.top - mi.rcWork.top + mi.rcMonitor.top;
+                            wp.rcNormalPosition.right = wp.rcNormalPosition.left + (cr.right - cr.left);
+                            wp.rcNormalPosition.bottom = wp.rcNormalPosition.top + (cr.bottom - cr.top);
+                            wp.showCmd = SW_SHOWNORMAL;
+                            SetWindowPlacement(target_, &wp);
+                        }
+                    }
+                }
+            }
+
+            BOOL disableTransitions = FALSE;
+            DwmSetWindowAttribute(target_, 3, &disableTransitions, sizeof(disableTransitions));
+
             SetForegroundWindow(target_);
             BringWindowToTop(target_);
 
