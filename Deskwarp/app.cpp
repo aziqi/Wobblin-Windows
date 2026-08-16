@@ -1244,6 +1244,10 @@ private:
     void captureLayeredState(HWND w) {
         origExStyle_ = GetWindowLongPtrW(w, GWL_EXSTYLE);
         origLayered_ = (origExStyle_ & WS_EX_LAYERED) != 0;
+        origPlacement_ = { sizeof(WINDOWPLACEMENT) };
+        if (!GetWindowPlacement(w, &origPlacement_)) {
+            origPlacement_.length = 0;
+        }
         if (origLayered_) {
             if (!GetLayeredWindowAttributes(w, NULL, &origAlpha_, &origFlags_)) {
                 origAlpha_ = 255; origFlags_ = LWA_ALPHA;
@@ -1374,28 +1378,30 @@ private:
 
             if (origLayered_) {
                 SetLayeredWindowAttributes(target_, 0, origAlpha_, origFlags_);
-                SetWindowPos(target_, HWND_TOP, nl, nt, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE | SWP_FRAMECHANGED);
             } else {
                 SetLayeredWindowAttributes(target_, 0, 255, LWA_ALPHA);
                 SetWindowLongPtrW(target_, GWL_EXSTYLE, origExStyle_);
-                SetWindowPos(target_, HWND_TOP, nl, nt, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE | SWP_FRAMECHANGED);
                 RedrawWindow(target_, NULL, NULL, RDW_ERASE | RDW_INVALIDATE | RDW_FRAME | RDW_ALLCHILDREN);
             }
 
+            SetWindowPos(target_, HWND_TOP, nl, nt, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_NOSENDCHANGING);
+
+            DwmFlush();
+
             {
-                WINDOWPLACEMENT wp = { sizeof(WINDOWPLACEMENT) };
-                if (GetWindowPlacement(target_, &wp)) {
-                    RECT cr;
-                    if (GetWindowRect(target_, &cr)) {
-                        HMONITOR hMon = MonitorFromRect(&cr, MONITOR_DEFAULTTONEAREST);
-                        MONITORINFO mi;
-                        mi.cbSize = sizeof(mi);
-                        if (hMon && GetMonitorInfoW(hMon, &mi)) {
-                            wp.rcNormalPosition.left = cr.left - mi.rcWork.left + mi.rcMonitor.left;
-                            wp.rcNormalPosition.top = cr.top - mi.rcWork.top + mi.rcMonitor.top;
-                            wp.rcNormalPosition.right = wp.rcNormalPosition.left + (cr.right - cr.left);
-                            wp.rcNormalPosition.bottom = wp.rcNormalPosition.top + (cr.bottom - cr.top);
+                RECT cr;
+                if (GetWindowRect(target_, &cr)) {
+                    HMONITOR hMon = MonitorFromRect(&cr, MONITOR_DEFAULTTONEAREST);
+                    MONITORINFO mi = { sizeof(mi) };
+                    if (hMon && GetMonitorInfoW(hMon, &mi)) {
+                        WINDOWPLACEMENT wp = { sizeof(WINDOWPLACEMENT) };
+                        if (GetWindowPlacement(target_, &wp)) {
+                            wp.rcNormalPosition.left = cr.left - mi.rcWork.left;
+                            wp.rcNormalPosition.top = cr.top - mi.rcWork.top;
+                            wp.rcNormalPosition.right = cr.right - mi.rcWork.left;
+                            wp.rcNormalPosition.bottom = cr.bottom - mi.rcWork.top;
                             wp.showCmd = SW_SHOWNORMAL;
+                            wp.flags = 0;
                             SetWindowPlacement(target_, &wp);
                         }
                     }
@@ -1485,6 +1491,7 @@ private:
     BYTE origAlpha_ = 255;
     DWORD origFlags_ = 0;
     bool origLayered_ = false;
+    WINDOWPLACEMENT origPlacement_ = { sizeof(WINDOWPLACEMENT) };
     int pendingSnap_ = 0;
 };
 
