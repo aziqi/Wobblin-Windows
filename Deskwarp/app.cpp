@@ -2094,23 +2094,37 @@ QColor ThemeColors::s_accent = QColor(0x00, 0x78, 0xD4);
 
 [[nodiscard]] static QIcon load_application_icon() noexcept {
     const QString app_dir = QDir(QCoreApplication::applicationDirPath()).canonicalPath();
-    if (app_dir.isEmpty()) {
-        return QIcon();
+    if (!app_dir.isEmpty()) {
+        const QString icon_path = QDir(app_dir).filePath(QStringLiteral("icon.ico"));
+        const QFileInfo fi(icon_path);
+        if (fi.exists() && fi.isFile()) {
+            const QIcon icon(fi.canonicalFilePath());
+            if (!icon.isNull() && !icon.availableSizes().isEmpty()) {
+                return icon;
+            }
+        }
     }
-    const QString icon_path = QDir(app_dir).filePath(QStringLiteral("icon.ico"));
-    const QFileInfo fi(icon_path);
-    if (!fi.exists() || !fi.isFile()) {
-        return QIcon();
+
+    static const char* kEmbeddedSvg = 
+        "<svg width=\"512\" height=\"512\" viewBox=\"0 0 512 512\" version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\">"
+        "<g><path fill=\"#0078D4\" d=\"M 98.002518 367.65776 C 98.002518 387.04776 113.61219 402.65743 133.00219 402.65743 L 185.92192 402.65743 A 40 40 0 0 0 183.00231 417.65787 A 40 40 0 0 0 223.00213 457.65769 A 40 40 0 0 0 263.00195 417.65787 A 40 40 0 0 0 260.08371 402.65743 L 313.00206 402.65743 C 332.39206 402.65743 348.00311 387.04776 348.00311 367.65776 L 348.00311 314.73803 A 40 40 0 0 1 333.00266 317.65764 A 40 40 0 0 1 293.77326 285.47047 L 262.23153 285.47047 A 40 40 0 0 1 223.00213 317.65764 A 40 40 0 0 1 183.77272 285.47047 L 152.23237 285.47047 A 40 40 0 0 1 113.00297 317.65764 A 40 40 0 0 1 98.002518 314.73803 L 98.002518 367.65776 z M 98.002518 240.57762 A 40 40 0 0 1 113.00297 237.65801 A 40 40 0 0 1 152.23237 269.84518 L 183.77272 269.84518 A 40 40 0 0 1 223.00213 237.65801 A 40 40 0 0 1 262.23153 269.84518 L 293.77326 269.84518 A 40 40 0 0 1 333.00266 237.65801 A 40 40 0 0 1 348.00311 240.57762 L 348.00311 187.65789 C 348.00311 168.26789 332.39206 152.65823 313.00206 152.65823 L 260.08371 152.65823 A 40 40 0 0 0 263.00195 137.65778 A 40 40 0 0 0 223.00213 97.657963 A 40 40 0 0 0 183.00231 137.65778 A 40 40 0 0 0 185.92192 152.65823 L 133.00219 152.65823 C 113.61219 152.65823 98.002518 168.26789 98.002518 187.65789 L 98.002518 240.57762 z M 198.6276 277.65783 A 24.374866 24.374864 0 0 0 223.00213 302.03235 A 24.374866 24.374864 0 0 0 247.37803 277.65783 A 24.374866 24.374864 0 0 0 223.00213 253.28193 A 24.374866 24.374864 0 0 0 198.6276 277.65783 z \" transform=\"matrix(0,1.4222232,-1.4222233,0,650.89143,-61.158798)\" />"
+        "</g></svg>";
+
+    QIcon fallbackIcon;
+    const QByteArray svgBytes(kEmbeddedSvg);
+    QSvgRenderer renderer(svgBytes);
+    if (renderer.isValid()) {
+        const int sizes[] = { 16, 20, 24, 32, 48, 64, 128, 256 };
+        for (int sz : sizes) {
+            QPixmap pix(sz, sz);
+            pix.fill(Qt::transparent);
+            QPainter p(&pix);
+            p.setRenderHint(QPainter::Antialiasing, true);
+            renderer.render(&p);
+            fallbackIcon.addPixmap(pix);
+        }
     }
-    const QString canonical_path = fi.canonicalFilePath();
-    if (canonical_path.isEmpty() || !canonical_path.startsWith(app_dir)) {
-        return QIcon();
-    }
-    const QIcon icon(canonical_path);
-    if (icon.isNull() || icon.availableSizes().isEmpty()) {
-        return QIcon();
-    }
-    return icon;
+    return fallbackIcon;
 }
 
 class GitHubButton final : public QWidget {
