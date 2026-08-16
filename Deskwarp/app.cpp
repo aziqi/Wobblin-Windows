@@ -509,6 +509,7 @@ public:
             for (int y = 0; y < texH_; ++y)
                 memcpy(d + (size_t)y *rowPitch, src + (size_t)y* texW_ *4, (size_t)texW_* 4);
         }
+        ready_.store(-1);
         return true;
     }
 
@@ -1024,7 +1025,6 @@ public:
             showOverlay(true);
             dragging_.store(true);
             renderRun_.store(true);
-            grabber_.start();
             renderThread_ = std::thread([this] { renderLoop(); });
             return;
         }
@@ -1088,7 +1088,6 @@ public:
                     showOverlay(true);
                     dragging_.store(true);
                     renderRun_.store(true);
-                    grabber_.start();
                     renderThread_ = std::thread([this] { renderLoop(); });
                     return;
                 }
@@ -1117,7 +1116,6 @@ public:
         showOverlay(true);
         dragging_.store(true);
         renderRun_.store(true);
-        grabber_.start();
         renderThread_ = std::thread([this] { renderLoop(); });
     }
 
