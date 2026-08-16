@@ -108,17 +108,17 @@ namespace cfg {
     constexpr int kGridH = 4;
     constexpr int kTilesX = 32;
     constexpr int kTilesY = 32;
-    inline float friction = 3.5f;
-    inline float stiffness = 1.9f;
-    inline float mass = 30.0f;
-    inline float restVel = 0.02f;
-    inline float restPos = 0.3f;
+    inline float friction = 2.6f;
+    inline float stiffness = 1.5f;
+    inline float mass = 24.0f;
+    inline float restVel = 0.025f;
+    inline float restPos = 0.35f;
     constexpr int kStepIters = 3;
     constexpr int kRenderSleepMs = 8;
     constexpr int kCaptureSleepMs = 120;
     constexpr int kMaxSettleFrames = 1200;
     constexpr int kSteadyExit = 4;
-    inline float boundRestitution = 0.18f;
+    inline float boundRestitution = 0.22f;
     constexpr int kMinCaptionVisible = 80;
     constexpr int kMaxCaptionVisible = 320;
     constexpr UINT kBaseDpi = 96;
@@ -128,20 +128,20 @@ namespace cfg {
     inline void applyRealismLevel(int level) {
         switch (level) {
         case 1:
-            friction = 5.5f; stiffness = 3.2f; mass = 38.0f;
-            restVel = 0.01f; restPos = 0.12f; boundRestitution = 0.08f;
+            friction = 3.6f; stiffness = 2.2f; mass = 30.0f;
+            restVel = 0.02f; restPos = 0.25f; boundRestitution = 0.15f;
             break;
         case 2:
-            friction = 3.5f; stiffness = 1.9f; mass = 30.0f;
-            restVel = 0.02f; restPos = 0.3f; boundRestitution = 0.18f;
+            friction = 2.6f; stiffness = 1.5f; mass = 24.0f;
+            restVel = 0.025f; restPos = 0.35f; boundRestitution = 0.22f;
             break;
         case 3:
-            friction = 2.2f; stiffness = 1.2f; mass = 24.0f;
-            restVel = 0.035f; restPos = 0.45f; boundRestitution = 0.28f;
+            friction = 1.7f; stiffness = 0.95f; mass = 18.0f;
+            restVel = 0.035f; restPos = 0.50f; boundRestitution = 0.32f;
             break;
         default:
-            friction = 1.2f; stiffness = 0.6f; mass = 18.0f;
-            restVel = 0.055f; restPos = 0.65f; boundRestitution = 0.42f;
+            friction = 0.95f; stiffness = 0.50f; mass = 12.0f;
+            restVel = 0.045f; restPos = 0.65f; boundRestitution = 0.45f;
             break;
         }
     }
