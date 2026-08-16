@@ -1371,25 +1371,26 @@ private:
             int soy = (int)(baseShadow_.y* fscale + 0.5f);
             int nl = fl - sox;
             int nt = ft - soy;
-            int ww = (int)(baseWndW_* fscale + 0.5f);
-            int wh = (int)(baseWndH_* fscale + 0.5f);
-            if (ww < 1) ww = baseWndW_;
-            if (wh < 1) wh = baseWndH_;
-            SetWindowPos(target_, HWND_TOP, nl, nt, ww, wh, SWP_NOACTIVATE | SWP_NOSENDCHANGING);
+            SetWindowPos(target_, HWND_TOP, nl, nt, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOSENDCHANGING);
 
             {
                 WINDOWPLACEMENT fwp = { sizeof(WINDOWPLACEMENT) };
                 if (GetWindowPlacement(target_, &fwp)) {
-                    RECT finalRect = { nl, nt, nl + ww, nt + wh };
-                    HMONITOR fmon = MonitorFromRect(&finalRect, MONITOR_DEFAULTTONEAREST);
-                    MONITORINFO fmi; fmi.cbSize = sizeof(fmi);
-                    if (fmon && GetMonitorInfoW(fmon, &fmi)) {
-                        OffsetRect(&finalRect, fmi.rcMonitor.left - fmi.rcWork.left, fmi.rcMonitor.top - fmi.rcWork.top);
+                    RECT cr;
+                    if (GetWindowRect(target_, &cr)) {
+                        int curW = cr.right - cr.left;
+                        int curH = cr.bottom - cr.top;
+                        RECT finalRect = { nl, nt, nl + curW, nt + curH };
+                        HMONITOR fmon = MonitorFromRect(&finalRect, MONITOR_DEFAULTTONEAREST);
+                        MONITORINFO fmi; fmi.cbSize = sizeof(fmi);
+                        if (fmon && GetMonitorInfoW(fmon, &fmi)) {
+                            OffsetRect(&finalRect, fmi.rcMonitor.left - fmi.rcWork.left, fmi.rcMonitor.top - fmi.rcWork.top);
+                        }
+                        fwp.flags = 0;
+                        fwp.showCmd = SW_SHOWNORMAL;
+                        fwp.rcNormalPosition = finalRect;
+                        SetWindowPlacement(target_, &fwp);
                     }
-                    fwp.flags = 0;
-                    fwp.showCmd = SW_SHOWNORMAL;
-                    fwp.rcNormalPosition = finalRect;
-                    SetWindowPlacement(target_, &fwp);
                 }
             }
 
