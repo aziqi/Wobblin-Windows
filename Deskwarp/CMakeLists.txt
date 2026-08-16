@@ -11,7 +11,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Svg)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Svg Network)
 
 set(APP_ICON_RESOURCE "")
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/icon.ico")
@@ -24,13 +24,16 @@ add_executable(Deskwarp WIN32
     ${APP_ICON_RESOURCE}
 )
 
-target_link_options(Deskwarp PRIVATE "-static-libgcc" "-static-libstdc++")
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_link_options(Deskwarp PRIVATE "-static-libgcc" "-static-libstdc++")
+endif()
 
 target_link_libraries(Deskwarp PRIVATE 
     Qt6::Core 
     Qt6::Gui 
     Qt6::Widgets 
     Qt6::Svg
+    Qt6::Network
 )
 
 if(WIN32)

@@ -20,10 +20,6 @@
   <a href="https://github.com/doebalov/Deskwarp/releases/download/1.0/Deskwarp.zip">
     <img src="https://img.shields.io/badge/DOWNLOAD-0066ff?style=for-the-badge" alt="Download">
   </a>
-  &nbsp;&nbsp;
-  <a href="https://dalink.to/doebalov">
-    <img src="https://img.shields.io/badge/DONATE-0066ff?style=for-the-badge" alt="Donate">
-  </a>
 </p>
 
 ---
