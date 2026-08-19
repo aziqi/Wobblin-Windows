@@ -1,51 +1,91 @@
 <p align="center">
-  <img src="logo.svg" width="120" alt="Deskwarp Logo">
+  <img src="wobblin_icon.png" width="140" alt="Wobblin Logo" style="border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
 </p>
 
-<h1 align="center">Deskwarp</h1>
+<h1 align="center">Wobblin</h1>
 
 <p align="center">
-  <strong>Bring the legendary Wobbly Windows effect to your desktop.</strong>
-</p>
-
-<p align="center">
-  <img src="win10.svg" width="22" alt="Windows 10" valign="middle">
-  &nbsp;
-  <img src="win11.svg" width="22" alt="Windows 11" valign="middle">
-  <br>
-  <strong>Supported OS:</strong> Windows 10 & 11
+  <strong>Bring the legendary physics-based Wobbly & Burn Window animations to modern Windows desktop.</strong>
 </p>
 
 <p align="center">
-  <a href="https://github.com/doebalov/Deskwarp/releases/download/1.0/Deskwarp.zip">
-    <img src="https://img.shields.io/badge/DOWNLOAD-0066ff?style=for-the-badge" alt="Download">
+  <a href="https://github.com/aziqi/Wobblin-Windows/releases">
+    <img src="https://img.shields.io/github/v/release/aziqi/Wobblin-Windows?color=7c3aed&style=for-the-badge&logo=github" alt="Release">
   </a>
+  <a href="https://github.com/aziqi/Wobblin-Windows/stargazers">
+    <img src="https://img.shields.io/github/stars/aziqi/Wobblin-Windows?color=3b82f6&style=for-the-badge&logo=github" alt="Stars">
+  </a>
+  <a href="https://github.com/aziqi/Wobblin-Windows/blob/main/LICENSE">
+    <img src="https://img.shields.io/github/license/aziqi/Wobblin-Windows?color=10b981&style=for-the-badge" alt="License">
+  </a>
+</p>
+
+<p align="center">
+  <img src="win10.svg" width="20" alt="Windows 10" valign="middle">
+  &nbsp;
+  <img src="win11.svg" width="20" alt="Windows 11" valign="middle">
+  &nbsp;
+  <strong>Supported OS:</strong> Windows 10 & 11 (64-bit)
 </p>
 
 ---
 
-## About The Project
+## ✨ Highlights & Key Features
 
-Deskwarp is a highly optimized, open-source desktop customization utility designed specifically for Windows 10 and Windows 11 environments. It reintroduces the classic, fluid, physics-based "Wobbly Windows" animation to modern operating systems. 
+Wobblin is a lightweight, open-source desktop utility for Windows 10 & 11 that reintroduces fluid **Wobbly Windows** physics and **Burn/Fade** window animations powered by DirectX 11 hardware acceleration and a sleek Qt6 Fluent Dark UI.
 
-Built with performance in mind, Deskwarp calculates and renders real-time window deformations. Whether you are moving or resizing application windows, the software applies smooth, interactive physics calculations that react instantly to cursor input, significantly enhancing the visual feedback and overall user experience of your workspace.
+* 🌀 **Kinetic Soft-Body Window Physics**: Dynamic spring-mass-damper mesh deformations during window dragging & movement.
+* 🔥 **Custom Shader Window Animations**: Smooth GPU-accelerated Burn, Fade, and Scale effects on window Open, Close, and Minimize events.
+* 🎨 **Modern Fluent Dark Interface**: Clean, frameless Qt6 desktop control panel with custom window titlebar, live exclusions list, and system tray integration.
+* ⚙️ **Process Exclusion Rules**: Easily exclude specific software or games by process name (`.exe`) to prevent unwanted window hooking.
+* ⚡ **High Efficiency**: Built natively in C++17 with Direct3D 11 hardware texture capturing and low-overhead Win32 hooks.
 
-## Why Choose Deskwarp
+---
 
-| Advantage | Description |
-| :--- | :--- |
-| **Fully Open-Source** | 100% transparent codebase. The project is entirely open for auditing, contributing, and modification with zero hidden background processes or telemetry. |
-| **Native Performance** | Engineered in C++ for maximum efficiency. Deskwarp operates with a minimal memory and CPU footprint, ensuring that system resources remain dedicated to your primary tasks. |
-| **Seamless Integration** | Fully compatible with modern Windows architectures. It functions unobtrusively alongside default OS window management protocols. |
-| **Physics-Based Rendering** | Employs advanced kinetic algorithms to ensure high frame rates and completely stutter-free animations, even during complex window operations. |
+## 🛠️ Architecture & Tech Stack
 
-## Open Source & Transparency
+| Component | Technology | Description |
+| :--- | :--- | :--- |
+| **Framework & UI** | Qt 6.8+ (C++17) | Modern frameless interface, system tray controls, and custom window management. |
+| **Graphics Engine** | Direct3D 11 & DXGI | Hardware-accelerated mesh deformation and pixel shader effects. |
+| **Hooking Mechanism** | Win32 API (`SetWinEventHook`, `SetWindowsHookEx`) | Low-level event processing for seamless OS-wide window tracking. |
+| **Physics Model** | Spring-Mass-Damper Grid | Real-time 2D planar SoftBody mesh simulation. |
 
-Security and community trust are fundamental to this project. Deskwarp is distributed completely free of charge, providing unrestricted access to the underlying logic and rendering pipeline. Developers and enthusiasts are encouraged to inspect the repository, review the architecture, compile the software directly from the source, and contribute to future iterations.
+---
 
-<br><br>
+## 🚀 Building from Source
+
+### Prerequisites
+* **Windows 10 / 11** (64-bit)
+* **Visual Studio 2022** (with C++ Desktop Workload & MSVC v143)
+* **CMake** (v3.16 or higher)
+* **Qt 6** (with `Core`, `Gui`, `Widgets`, `Svg`, `Network` components)
+
+### Build Commands
+
+```powershell
+# 1. Clone the repository
+git clone https://github.com/aziqi/Wobblin-Windows.git
+cd Wobblin-Windows
+
+# 2. Configure build environment with CMake
+cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
+
+# 3. Compile Release binary
+cmake --build build --config Release
+```
+
+The compiled output and deployed runtime dependencies will be generated in `build/Release/Wobblin.exe`.
+
+---
+
+## 🤝 Contributing & License
+
+Contributions, issue reports, and feature suggestions are welcome! Distributed under the [MIT License](LICENSE).
+
+<br>
 <div align="center">
   <small>
-    <b>Keywords (do not read):</b> wobbly windows, jelly windows, windows 10, windows 11, desktop customization, desktop ricing, window physics, desktop effects, fluid window animations, bouncy windows, kinetic ui, window manager, compiz fusion alternative, compiz for windows, kwin wobbly windows, windowfx alternative, c++ window manager, qt6 desktop application, win32 api tweaks, directx rendering, dwm hooking, desktop modding, aesthetic desktop, open-source windows tweaks, ui tweaking, visual enhancement, native performance, window drag effects.
+    <b>Keywords:</b> wobbly windows, jelly windows, windows 10, windows 11, desktop customization, desktop ricing, window physics, desktop effects, fluid window animations, compiz fusion alternative, kwin wobbly windows, c++ window manager, qt6 desktop application, directx 11 rendering, dwm hooking.
   </small>
 </div>
