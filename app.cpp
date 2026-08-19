@@ -3193,7 +3193,7 @@ class GitHubButton final : public QWidget {
 public:
     explicit GitHubButton(QWidget* parent = nullptr)
         : QWidget(parent),
-          m_url(QStringLiteral(""), QUrl::StrictMode),
+          m_url(QStringLiteral("https://github.com/aziqi/Wobblin-Windows"), QUrl::StrictMode),
           m_svg_template(QStringLiteral(
               "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 16 16\" width=\"32\" height=\"32\">"
               "<path fill=\"{color}\" d=\"M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 "
