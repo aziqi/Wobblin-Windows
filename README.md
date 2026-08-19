@@ -26,9 +26,7 @@
 ---
 
 <p align="center">
-  <a href="https://github.com/aziqi/Wobblin-Windows/releases/download/v1.0/wobblin_demo.mp4">
-    <img src="https://img.shields.io/badge/%F0%9F%8E%A5_Watch_Full_HD_Demo_Video-MP4-7c3aed?style=for-the-badge&logo=windows&logoColor=white" alt="Watch Full HD Demo Video">
-  </a>
+  <img src="demo.webp" alt="Wobblin Demo Showcase" width="850">
 </p>
 
 ## ✨ Overview
