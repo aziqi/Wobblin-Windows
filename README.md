@@ -26,7 +26,9 @@
 ---
 
 <p align="center">
-  <video src="demo.mp4" autoplay loop muted playsinline width="850"></video>
+  <a href="https://github.com/aziqi/Wobblin-Windows/releases/download/v1.0/wobblin_demo.mp4">
+    <img src="https://img.shields.io/badge/%F0%9F%8E%A5_Watch_Full_HD_Demo_Video-MP4-7c3aed?style=for-the-badge&logo=windows&logoColor=white" alt="Watch Full HD Demo Video">
+  </a>
 </p>
 
 ## ✨ Overview
@@ -53,7 +55,7 @@ Controlled through a modern **Qt6 Fluent Dark** frameless dashboard, Wobblin giv
   <tr>
     <td width="50%">
       <h3>🎛️ Fluent Dark Control Panel</h3>
-      <p>Custom frameless Qt6 interface featuring glassmorphism, accent glows, custom titlebar controls, and responsive sliders.</p>
+      <p>Custom frameless Qt6 interface with native DWM backdrop blur, custom window titlebar controls, and responsive sliders.</p>
     </td>
     <td width="50%">
       <h3>🚫 Per-Process Exclusions</h3>
