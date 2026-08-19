@@ -1,0 +1,10 @@
+build/
+.hermes/
+.kilo/
+*.obj
+*.pdb
+*.i
+*.res
+*.log
+*.tmp
+*.bak
