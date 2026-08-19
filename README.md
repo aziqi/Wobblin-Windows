@@ -25,9 +25,9 @@
 
 ---
 
-<!-- DEMO SHOWCASE PLACEHOLDER -->
-<!-- Add demo.gif or demo.png in the repo root to showcase the wobbly physics effect in action -->
-<!-- <p align="center"><img src="demo.gif" alt="Wobblin Demo" width="800"></p> -->
+<p align="center">
+  <img src="demo.gif" alt="Wobblin Demo Showcase" width="850">
+</p>
 
 ## ✨ Overview
 
@@ -191,10 +191,4 @@ Grateful appreciation to the open-source Linux desktop communities (**Compiz Fus
 
 Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for details.
 
-<br>
 
-<div align="center">
-  <small>
-    <b>Keywords:</b> wobbly windows, jelly windows, windows 10, windows 11, desktop customization, desktop ricing, window physics, compiz fusion alternative, kwin wobbly windows alternative, directx 11 window animation, qt6 desktop app, win32 hook, dwm effects, open-source windows tool.
-  </small>
-</div>
