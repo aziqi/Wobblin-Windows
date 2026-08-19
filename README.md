@@ -183,9 +183,12 @@ Contributions, feedback, and pull requests are welcome! If you'd like to improve
 
 ---
 
-## 🙏 Acknowledgements
+## 🙏 Credits & Acknowledgements
 
-Grateful appreciation to the open-source Linux desktop communities (**Compiz Fusion** & **KWin**) who pioneered wobbly window physics, and the Microsoft DirectX / Win32 graphics developer ecosystem.
+Special thanks and appreciation to:
+
+- **[doebalov/Deskwarp](https://github.com/doebalov/Deskwarp)** — Sincere thanks to this repository for providing the foundational architecture, Direct3D 11 rendering pipeline, and Win32 hooking baseline that made this project possible and successful.
+- The open-source Linux desktop communities (**Compiz Fusion** & **KWin**) who first pioneered wobbly window physics.
 
 ---
 
