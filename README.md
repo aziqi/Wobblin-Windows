@@ -26,7 +26,7 @@
 ---
 
 <p align="center">
-  <img src="demo.gif" alt="Wobblin Demo Showcase" width="850">
+  <video src="demo.mp4" autoplay loop muted playsinline width="850"></video>
 </p>
 
 ## ✨ Overview
