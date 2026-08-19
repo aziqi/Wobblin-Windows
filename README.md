@@ -117,11 +117,7 @@ There are likely many edge cases, crashes, and compatibility issues that have no
 
 ## 🙏 Credits & Acknowledgements
 
-This project would not exist without the foundational work done in:
-
-> **[doebalov/Deskwarp](https://github.com/doebalov/Deskwarp)**
->
-> The original `Deskwarp` repository provided the core architecture, Direct3D 11 pipeline, and Win32 hooking mechanisms that made this entire project possible. A huge thank you to the author for their incredible engineering work and for making it open source.
+Inspired by the pioneering work of the **Compiz Fusion** and **KWin** open-source communities who first brought physics-based window animations to life, as well as the modern DirectX and Win32 developer communities.
 
 ---
 
