@@ -10,13 +10,13 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/aziqi/Wobblin-Windows/releases">
-    <img src="https://img.shields.io/github/v/release/aziqi/Wobblin-Windows?color=7c3aed&style=for-the-badge&logo=github&label=Release" alt="Release">
+  <a href="https://github.com/aziqi/Wobblin-Windows/releases/latest">
+    <img src="https://img.shields.io/badge/Release-v1.0-7c3aed?style=for-the-badge&logo=github" alt="Release v1.0">
   </a>
   <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?style=for-the-badge&logo=windows&logoColor=white" alt="Windows 10/11">
   <img src="https://img.shields.io/badge/Status-Beta-f59e0b?style=for-the-badge" alt="Beta">
   <a href="https://github.com/aziqi/Wobblin-Windows/blob/main/LICENSE">
-    <img src="https://img.shields.io/github/license/aziqi/Wobblin-Windows?color=10b981&style=for-the-badge" alt="License">
+    <img src="https://img.shields.io/badge/License-MIT-10b981?style=for-the-badge" alt="License MIT">
   </a>
 </p>
 
