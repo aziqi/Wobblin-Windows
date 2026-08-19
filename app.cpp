@@ -3124,14 +3124,6 @@ QColor ThemeColors::s_accent = QColor(0x00, 0x78, 0xD4);
         const QIcon icon(QStringLiteral("wobblin_icon.png"));
         if (!icon.isNull()) return icon;
     }
-    if (QFile::exists(QStringLiteral("D:/Project/Deskwarp/icon.ico"))) {
-        const QIcon icon(QStringLiteral("D:/Project/Deskwarp/icon.ico"));
-        if (!icon.isNull()) return icon;
-    }
-    if (QFile::exists(QStringLiteral("D:/Project/Deskwarp/wobblin_icon.png"))) {
-        const QIcon icon(QStringLiteral("D:/Project/Deskwarp/wobblin_icon.png"));
-        if (!icon.isNull()) return icon;
-    }
     return QIcon();
 }
 
